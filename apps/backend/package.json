@@ -1,0 +1,29 @@
+{
+  "name": "backend",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch index.ts",
+    "start": "bun index.ts",
+    "worker": "bun --watch src/worker.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "auth": "*",
+    "better-auth": "^1.6.29",
+    "cors": "^2.8.6",
+    "db": "*",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "redis": "^6.2.1",
+    "uuid": "^14.0.1"
+  }
+}

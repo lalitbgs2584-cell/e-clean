@@ -1,0 +1,53 @@
+# Git / IDE
+.git
+.gitignore
+
+# Dependencies
+node_modules
+**/node_modules
+
+# Build output
+dist
+**/dist
+build
+**/build
+.expo
+**/.expo
+.next
+**/.next
+out
+**/out
+
+# Turborepo
+.turbo
+**/.turbo
+
+# AI / agent files & symlinks
+.agents
+**/.agents
+.claude
+**/.claude
+.cursor
+**/.cursor
+.codex
+**/.codex
+.windsurf
+**/.windsurf
+**/skills-lock.json
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs & Debug
+*.log
+**/*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Local caches
+.cache
+**/.cache
+.DS_Store
+

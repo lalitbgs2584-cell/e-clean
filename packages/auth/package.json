@@ -1,0 +1,21 @@
+{
+  "name": "auth",
+  "module": "src/auth.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "exports": {
+    ".": "./src/auth.ts",
+    "./client": "./src/auth-client.ts"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@better-auth/expo": "^1.6.29",
+    "better-auth": "^1.6.29",
+    "db": "*"
+  }
+}

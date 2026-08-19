@@ -1,0 +1,38 @@
+# Git / IDE
+.git
+.gitignore
+
+# Node
+node_modules
+**/node_modules
+
+# Build output
+dist
+build
+.expo
+**/.expo
+
+# Turborepo
+.turbo
+
+# AI / agent files
+.agents
+**/.agents
+.claude
+**/.claude
+.cursor
+**/.cursor
+.codex
+**/.codex
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Local caches
+.cache
+**/.cache
