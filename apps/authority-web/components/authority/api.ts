@@ -1,12 +1,9 @@
-<<<<<<< HEAD
-﻿import type {
+import type {
   AuthorityDashboardPayload,
   AuthorityReport,
   ReportActionType,
   VerificationResult,
 } from "./shared";
-=======
-import type { AuthorityDashboardPayload, AuthorityReport, ReportActionType, VerificationResult } from "./shared";
 
 export class AuthorityApiError extends Error {
   status: number;
@@ -17,7 +14,6 @@ export class AuthorityApiError extends Error {
     this.status = status;
   }
 }
->>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
 
 async function parseJson<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null);
@@ -81,6 +77,26 @@ export const authorityApi = {
       {
         method: "POST",
         body: JSON.stringify({}),
+      },
+    );
+  },
+  createUser(
+    token: string,
+    payload: {
+      name: string;
+      email: string;
+      password: string;
+      role: "WORKER" | "AUTHORITY";
+      zone?: string;
+      phone?: string;
+    },
+  ) {
+    return request<{ success: boolean; data: any }>(
+      "/api/authority/users",
+      token,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
       },
     );
   },

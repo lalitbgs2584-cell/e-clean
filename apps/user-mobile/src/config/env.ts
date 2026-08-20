@@ -6,5 +6,6 @@ export const config = {
   // Compatibility aliases while callers are moved to apiUrl.
   expoPublicBaseURL: apiUrl,
   backendURL: apiUrl,
-  cloudfrontDomain: process.env.EXPO_PUBLIC_CLOUDFRONT_DOMAIN ?? "",
+  cloudfrontDomain: process.env.EXPO_PUBLIC_CLOUDFRONT_REPORT_DOMAIN ?? "",
+  cloudfrontProfileDomain: process.env.EXPO_PUBLIC_CLOUDFRONT_PROFILE_DOMAIN ?? "",
 };

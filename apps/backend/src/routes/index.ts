@@ -4,6 +4,8 @@ import { userRouter } from "./user.routes";
 import { reportRouter } from "./report.routes";
 import { uploadRouter } from "./upload.routes";
 import { aiReportRouter } from "./ai-report.routes";
+import { workerRouter } from "./worker.routes";
+
 const apiRouter = Router();
 
 // NOTE: /api/auth is NOT mounted here — Better Auth is mounted directly in
@@ -13,6 +15,6 @@ apiRouter.use("/users", userRouter);
 apiRouter.use("/reports", reportRouter);
 apiRouter.use("/upload", uploadRouter);
 apiRouter.use("/ai-reports", aiReportRouter);
-
+apiRouter.use("/worker", workerRouter);
 
 export { apiRouter };

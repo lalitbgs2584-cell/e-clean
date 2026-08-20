@@ -38,15 +38,20 @@ export default function LoginScreen() {
     setError(null);
     setLoading(true);
     try {
-      const { error: authError } = await signIn.email({
+      const { data: sessionData, error: authError } = await signIn.email({
         email: email.trim().toLowerCase(),
         password,
       });
       if (authError) {
-        console.log("Auth error:->", authError)
+        console.log("Auth error:->", authError);
         setError(authError.message ?? 'Login failed. Please try again.');
       } else {
-        router.replace('/(tabs)/home');
+        const role = (sessionData?.user as any)?.role ?? 'CITIZEN';
+        if (role === 'WORKER') {
+          router.replace('/(worker)/(tabs)/home' as any);
+        } else {
+          router.replace('/(tabs)/home');
+        }
       }
     } catch (e: any) {
       console.log("Error:->", e)

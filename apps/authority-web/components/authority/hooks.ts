@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { authClient } from "@/lib/auth-client";
@@ -16,18 +16,6 @@ type AuthoritySessionUser = {
 };
 
 type AuthoritySessionState = {
-<<<<<<< HEAD
-  data: { session: { token: string }; user: AuthoritySessionUser } | null;
-  isPending: boolean;
-  error: Error | null;
-  token: string | null;
-  user: AuthoritySessionUser | null;
-};
-
-export function useAuthoritySession(): AuthoritySessionState {
-  const session = authClient.useSession();
-  const data = session.data as AuthoritySessionState["data"];
-=======
   data: {
     session?: {
       token?: string | null;
@@ -35,21 +23,23 @@ export function useAuthoritySession(): AuthoritySessionState {
     user: AuthoritySessionUser;
   } | null;
   isPending: boolean;
+  error?: Error | null;
 };
 
 export function useAuthoritySession(): {
   data: AuthoritySessionState["data"];
   isPending: boolean;
+  error: Error | null;
   token: string | null;
   user: AuthoritySessionUser | null;
 } {
-  const session = authClient.useSession() as AuthoritySessionState;
->>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
+  const session = authClient.useSession();
+  const data = session.data as AuthoritySessionState["data"];
   return {
     data,
     isPending: session.isPending,
-    error: session.error instanceof Error ? session.error : null,
-    token: data?.session.token ?? null,
+    error: (session as any).error instanceof Error ? (session as any).error : null,
+    token: data?.session?.token ?? null,
     user: data?.user ?? null,
   };
 }

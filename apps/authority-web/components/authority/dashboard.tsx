@@ -19,22 +19,19 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  UserPlus,
   Users,
   X,
   LoaderCircle,
   type LucideIcon,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-<<<<<<< HEAD
+import { AuthorityApiError, authorityApi } from "./api";
 import {
   useAuthorityDashboardQuery,
   useAuthoritySession,
   useReportActionMutation,
 } from "./hooks";
-=======
-import { AuthorityApiError } from "./api";
-import { useAuthorityDashboardQuery, useAuthoritySession, useReportActionMutation } from "./hooks";
->>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
 import {
   STATUS_TONES,
   buildTimeline,
@@ -970,7 +967,229 @@ function SettingsPanel({
   );
 }
 
-function WorkersPanel({ payload }: { payload: AuthorityDashboardPayload }) {
+function AddUserModal({
+  zones,
+  token,
+  onClose,
+  onSuccess,
+}: {
+  zones: AuthorityDashboardPayload["zones"];
+  token: string | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [role, setRole] = useState<"WORKER" | "AUTHORITY">("WORKER");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [zone, setZone] = useState("");
+  const [phone, setPhone] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim() || !password) {
+      setError("Please fill in full name, email, and password.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      return;
+    }
+    if (!token) {
+      setError("Authentication required.");
+      return;
+    }
+
+    setError(null);
+    setPending(true);
+
+    try {
+      await authorityApi.createUser(token, {
+        name: name.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        role,
+        zone: zone.trim() || undefined,
+        phone: phone.trim() || undefined,
+      });
+      onSuccess();
+    } catch (err: any) {
+      setError(err?.message ?? "Failed to create user.");
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="overlay modal-overlay">
+      <div
+        className="modal workflow-modal"
+        style={{
+          maxWidth: 580,
+          width: "92%",
+          maxHeight: "88vh",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <button className="modal-close" onClick={onClose} disabled={pending}>
+          <X size={19} />
+        </button>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+          <span className="modal-icon" style={{ margin: 0 }}>
+            {role === "WORKER" ? <Users size={22} /> : <ShieldCheck size={22} />}
+          </span>
+          <div>
+            <h2 style={{ fontSize: 18, margin: 0 }}>
+              {role === "WORKER" ? "Provision Field Worker" : "Provision Authority Officer"}
+            </h2>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>
+              {role === "WORKER"
+                ? "Creates credentials for mobile field worker app access."
+                : "Creates credentials for authority web command center access."}
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+          {/* Role selector pill toggle */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              padding: 4,
+              background: "var(--surface-subtle, #f5f8f5)",
+              borderRadius: 10,
+              border: "1px solid var(--border-color, #dce3d8)",
+            }}
+          >
+            <button
+              type="button"
+              className={`button ${role === "WORKER" ? "primary" : "ghost"}`}
+              style={{ padding: "7px 12px", fontSize: 12, justifyContent: "center" }}
+              onClick={() => setRole("WORKER")}
+            >
+              <Users size={14} style={{ marginRight: 6 }} /> Field Worker
+            </button>
+            <button
+              type="button"
+              className={`button ${role === "AUTHORITY" ? "primary" : "ghost"}`}
+              style={{ padding: "7px 12px", fontSize: 12, justifyContent: "center" }}
+              onClick={() => setRole("AUTHORITY")}
+            >
+              <ShieldCheck size={14} style={{ marginRight: 6 }} /> Authority Officer
+            </button>
+          </div>
+
+          {/* Row 1: Name & Email */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <label className="setting-field" style={{ margin: 0 }}>
+              Full Name *
+              <input
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={role === "WORKER" ? "Ramesh Kumar" : "Officer Sharma"}
+              />
+            </label>
+
+            <label className="setting-field" style={{ margin: 0 }}>
+              Email Address *
+              <input
+                required
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder={role === "WORKER" ? "worker@eclean.in" : "officer@city.gov"}
+              />
+            </label>
+          </div>
+
+          {/* Row 2: Password & Phone */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <label className="setting-field" style={{ margin: 0 }}>
+              Initial Password *
+              <input
+                required
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Min. 8 characters"
+              />
+            </label>
+
+            <label className="setting-field" style={{ margin: 0 }}>
+              Contact Phone (Optional)
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+91 98765 43210"
+              />
+            </label>
+          </div>
+
+          {/* Row 3: Zone */}
+          <label className="setting-field" style={{ margin: 0 }}>
+            Assigned Ward / Zone (Optional)
+            <input
+              value={zone}
+              onChange={(e) => setZone(e.target.value)}
+              placeholder="e.g. Ward 12, Green Park"
+              list="zones-datalist"
+            />
+            <datalist id="zones-datalist">
+              {zones.map((z) => (
+                <option key={z.zone} value={z.zone} />
+              ))}
+            </datalist>
+          </label>
+
+          {error && (
+            <div
+              style={{
+                color: "#D64545",
+                backgroundColor: "#FFF2F2",
+                border: "1px solid #FFCDD2",
+                padding: "8px 12px",
+                borderRadius: 8,
+                fontSize: 12,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="modal-actions" style={{ marginTop: 4 }}>
+            <button type="button" className="button ghost" onClick={onClose} disabled={pending}>
+              Cancel
+            </button>
+            <button type="submit" className="button primary" disabled={pending}>
+              {pending
+                ? "Creating..."
+                : role === "WORKER"
+                  ? "Create Worker Account"
+                  : "Create Authority Account"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function WorkersPanel({
+  payload,
+  onAddUser,
+}: {
+  payload: AuthorityDashboardPayload;
+  onAddUser: () => void;
+}) {
   return (
     <article className="card table-card">
       <div className="card-title">
@@ -978,7 +1197,10 @@ function WorkersPanel({ payload }: { payload: AuthorityDashboardPayload }) {
           <h2>Field workforce</h2>
           <p>Availability, workload, and operational performance.</p>
         </div>
-        <button className="button primary">Add worker</button>
+        <button className="button primary" onClick={onAddUser}>
+          <UserPlus size={16} style={{ marginRight: 6 }} />
+          Add member
+        </button>
       </div>
       <div className="table-wrap">
         <table>
@@ -1023,7 +1245,7 @@ function WorkersPanel({ payload }: { payload: AuthorityDashboardPayload }) {
 
 export default function AuthorityDashboard() {
   const router = useRouter();
-  const { data: session, isPending, token } = useAuthoritySession();
+  const { data: session, isPending, token, user } = useAuthoritySession();
   const dashboardQuery = useAuthorityDashboardQuery(token);
   const actionMutation = useReportActionMutation(token);
   const [page, setPage] = useState<Page>("Overview");
@@ -1032,6 +1254,7 @@ export default function AuthorityDashboard() {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [modal, setModal] = useState<ModalState>(null);
+  const [addUserOpen, setAddUserOpen] = useState(false);
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [selectedDuplicateId, setSelectedDuplicateId] = useState("");
   const [note, setNote] = useState("");
@@ -1119,23 +1342,16 @@ export default function AuthorityDashboard() {
     }
   }, [selectedReport, selectedReportId]);
 
-<<<<<<< HEAD
-  if (isPending || !session || dashboardQuery.isPending || !payload)
-    return <LoadingState />;
-  if (user?.role !== "AUTHORITY")
+  if (isPending || !session || dashboardQuery.isPending) return <LoadingState />;
+  if (user?.role !== "AUTHORITY" || (dashboardQuery.error instanceof AuthorityApiError && dashboardQuery.error.status === 403)) {
     return (
       <AccessDenied
         email={user?.email ?? session.user.email}
         onSignOut={signOut}
       />
     );
-=======
-  if (isPending || !session || dashboardQuery.isPending) return <LoadingState />;
-  if (dashboardQuery.error instanceof AuthorityApiError && dashboardQuery.error.status === 403) {
-    return <AccessDenied email={session.user.email} onSignOut={signOut} />;
   }
   if (!payload) return <LoadingState />;
->>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
 
   const title = page === "Overview" ? "Authority Dashboard" : page;
 
@@ -1454,7 +1670,12 @@ export default function AuthorityDashboard() {
               emptyLabel="No assignments are waiting right now."
             />
           ) : null}
-          {page === "Workers" ? <WorkersPanel payload={payload} /> : null}
+          {page === "Workers" ? (
+            <WorkersPanel
+              payload={payload}
+              onAddUser={() => setAddUserOpen(true)}
+            />
+          ) : null}
           {page === "Verification" ? (
             <ReportTable
               title="Cleanup review queue"
@@ -1580,6 +1801,17 @@ export default function AuthorityDashboard() {
             setNote("");
           }}
           pending={actionMutation.isPending}
+        />
+      ) : null}
+      {addUserOpen ? (
+        <AddUserModal
+          zones={payload.zones}
+          token={token}
+          onClose={() => setAddUserOpen(false)}
+          onSuccess={() => {
+            setAddUserOpen(false);
+            dashboardQuery.refetch();
+          }}
         />
       ) : null}
     </main>

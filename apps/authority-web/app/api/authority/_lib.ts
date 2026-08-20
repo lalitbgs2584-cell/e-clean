@@ -1,9 +1,4 @@
-<<<<<<< HEAD
-﻿import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-=======
 import { NextResponse } from "next/server";
->>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
 import { prisma } from "db/client";
 import type {
   AuthorityChartSeries,
@@ -335,7 +330,6 @@ function buildZones(reports: AuthorityReport[]): AuthorityZone[] {
 function buildWorkers(workers: any[]): any[] {
   return workers.map((worker) => {
     const cleanups = worker.cleanupsDone ?? [];
-<<<<<<< HEAD
     const activeAssignments = cleanups.filter(
       (cleanup: any) => !["COMPLETED", "CANCELLED"].includes(cleanup.status),
     ).length;
@@ -356,15 +350,6 @@ function buildWorkers(workers: any[]): any[] {
           (a: string, b: string) =>
             new Date(b).getTime() - new Date(a).getTime(),
         )[0] ?? worker.updatedAt;
-=======
-    const activeAssignments = cleanups.filter((cleanup: any) => !["COMPLETED", "CANCELLED"].includes(cleanup.status)).length;
-    const completedToday = cleanups.filter((cleanup: any) => cleanup.completedAt && sameDay(new Date(cleanup.completedAt), new Date())).length;
-    const lastActive =
-      cleanups
-        .flatMap((cleanup: any) => [cleanup.startedAt, cleanup.completedAt, cleanup.assignedAt])
-        .filter(Boolean)
-        .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0] ?? worker.updatedAt;
->>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
 
     const specialties = [
       ...new Set(

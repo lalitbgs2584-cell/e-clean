@@ -10,9 +10,13 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 const PUBLIC_ROUTES = new Set(['index', 'onboarding', 'login', 'location-permission']);
 
 /**
- * Auth guard: watches the Better Auth session and redirects accordingly.
+ * Auth guard: watches the Better Auth session and redirects by role.
+ *
  *  - Not authenticated + protected screen → /login
- *  - Authenticated + auth screen          → /(tabs)/home
+ *  - Authenticated CITIZEN + public screen → /(tabs)/home
+ *  - Authenticated WORKER  + public screen → /(worker)/(tabs)/home
+ *  - Authenticated AUTHORITY               → /(tabs)/home is not appropriate;
+ *    the worker layout handles this gracefully with an access message.
  *  - Session user is mirrored into the citizen store for screens
  *    that still read profile data from there.
  */
@@ -35,13 +39,43 @@ function AuthGuard() {
   useEffect(() => {
     if (isPending) return; // still loading session from SecureStore
 
-    const current = segments[0] ?? 'index';
+    const current: string = (segments[0] as string) ?? 'index';
     const isOnPublicScreen = PUBLIC_ROUTES.has(current);
+    const isOnWorkerScreen = current === '(worker)';
+    const isOnCitizenTabsScreen = current === '(tabs)';
 
     if (!session && !isOnPublicScreen) {
+      // Not authenticated → send to login
       router.replace('/login');
-    } else if (session && isOnPublicScreen) {
-      router.replace('/(tabs)/home');
+      return;
+    }
+
+    if (session && isOnPublicScreen) {
+      const role = (session.user as any)?.role ?? 'CITIZEN';
+      if (role === 'WORKER') {
+        router.replace('/(worker)/(tabs)/home' as any);
+      } else {
+        // CITIZEN and AUTHORITY both land here
+        router.replace('/(tabs)/home');
+      }
+      return;
+    }
+
+    // Prevent a logged-in WORKER from accidentally navigating citizen tabs
+    if (session && isOnCitizenTabsScreen) {
+      const role = (session.user as any)?.role ?? 'CITIZEN';
+      if (role === 'WORKER') {
+        router.replace('/(worker)/(tabs)/home' as any);
+      }
+      return;
+    }
+
+    // Prevent a logged-in CITIZEN from accessing worker routes
+    if (session && isOnWorkerScreen) {
+      const role = (session.user as any)?.role ?? 'CITIZEN';
+      if (role === 'CITIZEN') {
+        router.replace('/(tabs)/home');
+      }
     }
   }, [session, isPending, segments]);
 
@@ -58,6 +92,7 @@ export default function RootLayout() {
         <Stack.Screen name="location-permission" />
         <Stack.Screen name="login" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(worker)" />
         <Stack.Screen name="report-details" />
         <Stack.Screen name="report-submitted" />
         <Stack.Screen name="report-tracking/[id]" />
