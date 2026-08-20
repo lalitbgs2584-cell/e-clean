@@ -1,13 +1,11 @@
 // services/queueService.ts
 
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 import { redis } from "../lib/redis";
 
 export interface AIClassificationJob {
   reportId: string;
-  originalImage?: string | null;
-  supportImage?: string | null;
-  imagePaths?: string[];
+  imagePaths: string[];
   location?: string | null;
   latitude: number;
   longitude: number;
@@ -15,9 +13,7 @@ export interface AIClassificationJob {
 
 const AI_QUEUE = "queue:ai-classification";
 
-export async function enqueueAIClassification(
-  job: AIClassificationJob
-) {
+export async function enqueueAIClassification(job: AIClassificationJob) {
   const jobId = uuidv4();
 
   const payload = {
@@ -27,10 +23,7 @@ export async function enqueueAIClassification(
     data: job,
   };
 
-  await redis.lPush(
-    AI_QUEUE,
-    JSON.stringify(payload)
-  );
+  await redis.lPush(AI_QUEUE, JSON.stringify(payload));
 
   return {
     jobId,

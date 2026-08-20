@@ -8,9 +8,10 @@ import {
 } from "../services/ai.service";
 import type { AIClassificationJob } from "../queues/ai-classification.queues";
 import { redis } from "../lib/redis";
+import { loadReportImagesForAI } from "../services/report-images.service";
 
 export async function processAIClassificationJob(
-  job: AIClassificationJob
+  job: AIClassificationJob,
 ): Promise<{
   assessment: WasteAssessment;
   uiCategory: string;
@@ -18,13 +19,7 @@ export async function processAIClassificationJob(
 }> {
   console.log(`[AI Worker] Processing job for report ${job.reportId}...`);
 
-  const images: { base64: string; mimeType: string }[] = [];
-  if (job.originalImage) {
-    images.push({ base64: job.originalImage, mimeType: "image/jpeg" });
-  }
-  if (job.supportImage) {
-    images.push({ base64: job.supportImage, mimeType: "image/jpeg" });
-  }
+  const images = await loadReportImagesForAI(job.imagePaths);
 
   // Assess images using AI or fallback
   let assessment: WasteAssessment | null = null;
@@ -33,7 +28,9 @@ export async function processAIClassificationJob(
   }
 
   if (!assessment) {
-    console.log(`[AI Worker] Using fallback assessment for report ${job.reportId}`);
+    console.log(
+      `[AI Worker] Using fallback assessment for report ${job.reportId}`,
+    );
     assessment = fallbackAssessment(null, job.location);
   }
 
@@ -51,6 +48,7 @@ export async function processAIClassificationJob(
       attention: assessment.attention,
       severityScore: assessment.severityScore,
       aiConfidence: assessment.aiConfidence,
+      aiProcessedAt: new Date(),
       description: assessment.description,
     },
   });
@@ -59,7 +57,7 @@ export async function processAIClassificationJob(
   const uiSeverity = severityFromScore(assessment.severityScore);
 
   console.log(
-    `[AI Worker] Successfully classified report ${job.reportId}: ${uiCategory}, ${uiSeverity} severity.`
+    `[AI Worker] Successfully classified report ${job.reportId}: ${uiCategory}, ${uiSeverity} severity.`,
   );
 
   return {

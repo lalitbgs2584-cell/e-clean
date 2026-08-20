@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { WasteCategory } from '@/store/citizen-store';
+import { useState, useCallback } from "react";
+import { WasteCategory } from "@/store/citizen-store";
 
 export type ReportStep = 1 | 2 | 3 | 4 | 5;
 
@@ -11,32 +11,34 @@ export interface ReportDraftState {
   longitude?: number;
   accuracyMeters?: number;
   wasteType: WasteCategory;
-  severity: 'Low' | 'Medium' | 'High';
+  severity: "Low" | "Medium" | "High";
   description: string;
   isRecurring: boolean;
-  duplicateChoice: 'none' | 'same_issue' | 'different_issue';
-  duplicateSimulated: boolean; // toggle to test both "Found duplicate" and "No duplicate"
+  duplicateChoice: "none" | "same_issue" | "different_issue";
 }
 
 const INITIAL_DRAFT: ReportDraftState = {
   photos: [],
-  location: 'Green Park, Near Main Road',
-  formattedAddress: 'Green Park, Near Main Road\nBhubaneswar, Odisha 751014',
+  location: "Green Park, Near Main Road",
+  formattedAddress: "Green Park, Near Main Road\nBhubaneswar, Odisha 751014",
   latitude: 20.2961,
   longitude: 85.8245,
   accuracyMeters: 10,
-  wasteType: 'Mixed Waste',
-  severity: 'High',
-  description: 'Garbage piled up near the corner of Green Park, causing bad smell and inconvenience.',
+  wasteType: "Mixed Waste",
+  severity: "High",
+  description:
+    "Garbage piled up near the corner of Green Park, causing bad smell and inconvenience.",
   isRecurring: true,
-  duplicateChoice: 'none',
-  duplicateSimulated: false,
+  duplicateChoice: "none",
 };
 
 export function useReportDraft() {
   const [step, setStep] = useState<ReportStep>(1);
   const [draft, setDraft] = useState<ReportDraftState>(INITIAL_DRAFT);
-  const [submittedReportId, setSubmittedReportId] = useState<string | null>(null);
+  const [submittedReportId, setSubmittedReportId] = useState<string | null>(
+    null,
+  );
+  const [pendingReportId, setPendingReportId] = useState<string | null>(null);
 
   const updateDraft = useCallback((updates: Partial<ReportDraftState>) => {
     setDraft((prev) => ({ ...prev, ...updates }));
@@ -60,6 +62,7 @@ export function useReportDraft() {
     setDraft(INITIAL_DRAFT);
     setStep(1);
     setSubmittedReportId(null);
+    setPendingReportId(null);
   }, []);
 
   const goToStep = useCallback((newStep: ReportStep) => {
@@ -79,6 +82,8 @@ export function useReportDraft() {
     draft,
     submittedReportId,
     setSubmittedReportId,
+    pendingReportId,
+    setPendingReportId,
     updateDraft,
     addPhoto,
     removePhoto,

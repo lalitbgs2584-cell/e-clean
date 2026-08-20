@@ -1,80 +1,64 @@
-/**
- * Authenticated fetch helper for the e-clean API.
- * Attaches the Better Auth session cookie stored in SecureStore.
- */
-import { authClient } from './auth-client';
-import { config } from '@/config/env';
+import { config } from "@/config/env";
 
+export type ReportPhotoSlot = "original" | "support";
 
-export interface PresignedUpload {
-  key: string;
-  uploadUrl: string;
-  url: string;
+interface PresignResponse {
+  success: boolean;
+  url?: string;
+  key?: string;
+  error?: string;
 }
 
-interface ApiError {
-  error: string;
-}
-
-export async function requestPresignedUploads(params: {
-  contentType: string;
-  count: number;
-}): Promise<PresignedUpload[]> {
-  const res = await fetch(`${config.apiUrl}/api/upload/presign`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      cookie: authClient.getCookie(),
+export async function uploadReportPhoto({
+  reportId,
+  slot,
+  fileUri,
+  token,
+}: {
+  reportId: string;
+  slot: ReportPhotoSlot;
+  fileUri: string;
+  token?: string;
+}): Promise<string> {
+  const presignResponse = await fetch(
+    `${config.apiUrl}/api/upload/create-presign-url`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ mime: "image/jpeg", reportId, slot }),
     },
-    body: JSON.stringify(params),
-  });
+  );
 
-  if (!res.ok) {
-    const data = (await res.json().catch(() => null)) as ApiError | null;
-    throw new Error(data?.error ?? `Upload failed (${res.status})`);
+  const presign = (await presignResponse
+    .json()
+    .catch(() => null)) as PresignResponse | null;
+  if (
+    !presignResponse.ok ||
+    !presign?.success ||
+    !presign.url ||
+    !presign.key
+  ) {
+    throw new Error(
+      presign?.error ?? `Could not prepare ${slot} photo upload.`,
+    );
   }
 
-  const data = (await res.json()) as { uploads: PresignedUpload[] };
-  return data.uploads;
-}
-
-export async function uploadToS3(
-  presigned: PresignedUpload,
-  fileUri: string,
-  contentType: string
-): Promise<void> {
-  const file = await fetch(fileUri).then((r) => r.blob());
-  const res = await fetch(presigned.uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': contentType },
-    body: file,
-  });
-  if (!res.ok) {
-    throw new Error(`Upload to S3 failed (${res.status})`);
-  }
-}
-
-/**
- * Uploads local (file://) photos to S3 and returns public URLs in the same
- * order. Remote http(s) URLs are passed through untouched. Throws if S3 is
- * not configured on the API — callers may fall back to the original URIs.
- */
-export async function uploadPhotos(photoUris: string[]): Promise<string[]> {
-  const local = photoUris
-    .filter((u) => !/^https?:\/\//.test(u))
-    .slice(0, 2);
-  if (local.length === 0) return photoUris;
-
-  const presigned = await requestPresignedUploads({
-    contentType: 'image/jpeg',
-    count: local.length,
-  });
-
-  const localToUrl = new Map<string, string>();
-  for (let i = 0; i < local.length; i++) {
-    await uploadToS3(presigned[i], local[i], 'image/jpeg');
-    localToUrl.set(local[i], presigned[i].url);
+  const image = await fetch(fileUri);
+  if (!image.ok) {
+    throw new Error("Could not read the selected photo.");
   }
 
-  return photoUris.map((u) => localToUrl.get(u) ?? u);
+  const uploadResponse = await fetch(presign.url, {
+    method: "PUT",
+    headers: { "Content-Type": "image/jpeg" },
+    body: await image.blob(),
+  });
+  if (!uploadResponse.ok) {
+    throw new Error(`Photo upload failed (${uploadResponse.status}).`);
+  }
+
+  return presign.key;
 }

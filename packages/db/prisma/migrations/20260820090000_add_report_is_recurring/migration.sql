@@ -1,0 +1,2 @@
+ALTER TABLE "reports"
+ADD COLUMN "isRecurring" BOOLEAN NOT NULL DEFAULT false;

@@ -135,10 +135,10 @@ enum NotificationType {
 // -------------------------
 
 model User {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   name          String
-  email         String   @unique
-  emailVerified Boolean  @default(false)
+  email         String  @unique
+  emailVerified Boolean @default(false)
   image         String?
   phone         String?
 
@@ -237,6 +237,7 @@ model Report {
 
   // ---- citizen input only ----
   description String?
+  isRecurring Boolean @default(false)
 
   // ---- location ----
   // latitude/longitude are plain columns so Prisma can read/write them
@@ -256,7 +257,7 @@ model Report {
   // Reverse-geocoded administrative zone/ward, filled by the AI/geocoding
   // pipeline. Lets the authority dashboard filter "reports in my zone" with
   // a plain indexed WHERE instead of a spatial query every time.
-  zone String?
+  zone        String?
 
   // ---- AI-generated fields — no human enters these ----
   dumpType              DumpType?
