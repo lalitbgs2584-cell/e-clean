@@ -15,8 +15,23 @@ type AuthoritySessionUser = {
   isActive?: boolean;
 };
 
-export function useAuthoritySession() {
-  const session = authClient.useSession();
+type AuthoritySessionState = {
+  data: {
+    session?: {
+      token?: string | null;
+    };
+    user: AuthoritySessionUser;
+  } | null;
+  isPending: boolean;
+};
+
+export function useAuthoritySession(): {
+  data: AuthoritySessionState["data"];
+  isPending: boolean;
+  token: string | null;
+  user: AuthoritySessionUser | null;
+} {
+  const session = authClient.useSession() as AuthoritySessionState;
   return {
     ...session,
     token: session.data?.session?.token ?? null,

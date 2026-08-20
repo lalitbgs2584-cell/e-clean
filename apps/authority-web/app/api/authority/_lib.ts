@@ -1,5 +1,4 @@
-﻿import { NextResponse } from "next/server";
-import { auth } from "auth";
+import { NextResponse } from "next/server";
 import { prisma } from "db/client";
 import type {
   AuthorityChartSeries,
@@ -13,10 +12,65 @@ import type {
   ReportStatus,
   VerificationResult,
 } from "@/components/authority/shared";
-import { buildTimeline, deriveCitizenVerificationState, deriveCleanupState, deriveWorkerName, getUrgencyLabel } from "@/components/authority/shared";
+import {
+  buildTimeline,
+  deriveCitizenVerificationState,
+  deriveCleanupState,
+  deriveWorkerName,
+  getUrgencyLabel,
+} from "@/components/authority/shared";
 
-export async function requireAuthoritySession(request: Request) {
-  const session = await auth.api.getSession({ headers: request.headers });
+function getBearerToken(request: Request) {
+  const authHeader = request.headers.get("authorization") ?? request.headers.get("Authorization");
+  if (!authHeader) return null;
+
+  const [scheme, token] = authHeader.split(" ");
+  if (!token || scheme?.toLowerCase() !== "bearer") return null;
+  return token.trim();
+}
+
+type AuthorityDbSession = {
+  expiresAt: Date;
+  user: {
+    id: string;
+    role: string;
+    email: string;
+    name: string;
+    zone: string | null;
+    isActive: boolean;
+  } & Record<string, unknown>;
+} | null;
+
+async function getSessionFromRequest(request: Request): Promise<AuthorityDbSession> {
+  const token = getBearerToken(request);
+
+  if (!token) {
+    return null;
+  }
+
+  const session = await prisma.session.findUnique({
+    where: { token },
+    include: {
+      user: true,
+    },
+  });
+
+  if (!session || session.expiresAt <= new Date()) {
+    return null;
+  }
+
+  return session;
+}
+
+type AuthoritySessionRecord = Awaited<ReturnType<typeof getSessionFromRequest>>;
+
+type AuthoritySessionGate = {
+  session: AuthoritySessionRecord | null;
+  response: NextResponse | null;
+};
+
+export async function requireAuthenticatedSession(request: Request): Promise<AuthoritySessionGate> {
+  const session = await getSessionFromRequest(request);
 
   if (!session?.user) {
     return {
@@ -25,14 +79,21 @@ export async function requireAuthoritySession(request: Request) {
     };
   }
 
-  if ((session.user as any).role !== "AUTHORITY") {
+  return { session, response: null };
+}
+
+export async function requireAuthoritySession(request: Request): Promise<AuthoritySessionGate> {
+  const authResult = await requireAuthenticatedSession(request);
+  if (authResult.response) return authResult;
+
+  if (authResult.session?.user.role !== "AUTHORITY") {
     return {
       session: null,
       response: NextResponse.json({ error: "Authority access required" }, { status: 403 }),
     };
   }
 
-  return { session, response: null };
+  return authResult;
 }
 
 function toIso(value: Date | string | null | undefined) {
@@ -214,10 +275,11 @@ function buildWorkers(workers: any[]): any[] {
     const cleanups = worker.cleanupsDone ?? [];
     const activeAssignments = cleanups.filter((cleanup: any) => !["COMPLETED", "CANCELLED"].includes(cleanup.status)).length;
     const completedToday = cleanups.filter((cleanup: any) => cleanup.completedAt && sameDay(new Date(cleanup.completedAt), new Date())).length;
-    const lastActive = cleanups
-      .flatMap((cleanup: any) => [cleanup.startedAt, cleanup.completedAt, cleanup.assignedAt])
-      .filter(Boolean)
-      .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0] ?? worker.updatedAt;
+    const lastActive =
+      cleanups
+        .flatMap((cleanup: any) => [cleanup.startedAt, cleanup.completedAt, cleanup.assignedAt])
+        .filter(Boolean)
+        .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0] ?? worker.updatedAt;
 
     const specialties = [...new Set(cleanups.map((cleanup: any) => cleanup.report?.wasteCategory).filter(Boolean))].slice(0, 3);
 

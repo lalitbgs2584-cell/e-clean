@@ -1,0 +1,261 @@
+.shell {
+  min-height: 100vh;
+  padding: 32px;
+  background:
+    radial-gradient(circle at top left, rgba(25, 111, 78, 0.18), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(223, 164, 66, 0.16), transparent 30%),
+    linear-gradient(180deg, #f5faf6 0%, #eef6ef 100%);
+  color: #163528;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.9fr);
+  gap: 28px;
+  align-items: stretch;
+}
+
+.copy,
+.panel,
+.card,
+.answerBand,
+.workflowSection {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(18, 63, 45, 0.08);
+  box-shadow: 0 24px 64px rgba(17, 59, 41, 0.08);
+  backdrop-filter: blur(16px);
+}
+
+.copy {
+  border-radius: 30px;
+  padding: 40px;
+  display: grid;
+  align-content: center;
+}
+
+.kicker,
+.sectionKicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #e3f2e7;
+  color: #14563b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.copy h1 {
+  margin: 18px 0 14px;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: clamp(42px, 6vw, 76px);
+  line-height: 0.94;
+  letter-spacing: -0.05em;
+  max-width: 10ch;
+}
+
+.copy p {
+  margin: 0;
+  max-width: 62ch;
+  color: #587266;
+  font-size: 18px;
+  line-height: 1.75;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.statRow article,
+.metricGrid article,
+.card,
+.locationCard,
+.answerList span,
+.workflowPills span {
+  border-radius: 18px;
+}
+
+.statRow article {
+  padding: 16px 18px;
+  background: #f7fbf7;
+  border: 1px solid rgba(18, 63, 45, 0.08);
+}
+
+.statRow strong,
+.metricGrid strong {
+  display: block;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 22px;
+  margin-bottom: 3px;
+}
+
+.statRow span,
+.metricGrid span,
+.card p,
+.locationCard p,
+.answerList span {
+  color: #607569;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.panel {
+  border-radius: 30px;
+  padding: 22px;
+  display: grid;
+  gap: 16px;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 800;
+  color: #14563b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.metricGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.metricGrid article {
+  padding: 18px;
+  background: #fbfdfa;
+  border: 1px solid rgba(18, 63, 45, 0.08);
+}
+
+.metricGrid b {
+  display: block;
+  color: #62766d;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.locationCard {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 18px;
+  background: linear-gradient(135deg, #164b36, #1d6a4a);
+  color: #fff;
+}
+
+.locationCard p {
+  color: rgba(255, 255, 255, 0.78);
+  margin-top: 4px;
+}
+
+.workflowSection,
+.answerBand {
+  margin-top: 22px;
+  border-radius: 28px;
+  padding: 24px;
+}
+
+.sectionHeading h2 {
+  margin: 10px 0 0;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: clamp(24px, 3vw, 38px);
+  line-height: 1.05;
+  max-width: 18ch;
+}
+
+.workflowPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.workflowPills span,
+.answerList span {
+  display: inline-flex;
+  align-items: center;
+  padding: 11px 14px;
+  border: 1px solid rgba(18, 63, 45, 0.08);
+  background: #fff;
+}
+
+.done {
+  background: #e5f6eb !important;
+  color: #16623f;
+}
+
+.current {
+  background: #fff4dd !important;
+  color: #8a5c08;
+}
+
+.upcoming {
+  color: #6c8176;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.card {
+  padding: 22px;
+}
+
+.card svg {
+  color: #146244;
+}
+
+.card h3 {
+  margin: 14px 0 8px;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  font-size: 19px;
+}
+
+.answerList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.answerBand {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 1100px) {
+  .hero,
+  .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .shell {
+    padding: 18px;
+  }
+
+  .hero,
+  .grid,
+  .statRow {
+    grid-template-columns: 1fr;
+  }
+}
