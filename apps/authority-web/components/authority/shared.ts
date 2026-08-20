@@ -10,7 +10,8 @@
   | "CANCELLED";
 
 export type AttentionLevel = "NORMAL" | "URGENT";
-export type CleanupStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type CleanupStatus =
+  "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type VerificationResult = "VERIFIED" | "DISPUTED";
 export type ReportActionType =
   | "assign"
@@ -194,7 +195,10 @@ export const STATUS_FLOW: Array<{ key: string; label: string }> = [
   { key: "DISPUTED", label: "Disputed" },
 ];
 
-export const STATUS_TONES: Record<ReportStatus, "mint" | "amber" | "red" | "gray"> = {
+export const STATUS_TONES: Record<
+  ReportStatus,
+  "mint" | "amber" | "red" | "gray"
+> = {
   PENDING: "gray",
   AI_ASSESSED: "amber",
   ASSIGNED: "mint",
@@ -266,7 +270,9 @@ export function formatRelativeTime(dateIso: string | null) {
   return `${days} day${days === 1 ? "" : "s"} ${diffMinutes < 0 ? "ago" : "from now"}`;
 }
 
-export function getUrgencyLabel(report: Pick<AuthorityReport, "attention" | "severityScore">) {
+export function getUrgencyLabel(
+  report: Pick<AuthorityReport, "attention" | "severityScore">,
+) {
   if (report.attention === "URGENT") return "Urgent";
   if ((report.severityScore ?? 0) >= 75) return "High";
   return "Normal";
@@ -274,19 +280,30 @@ export function getUrgencyLabel(report: Pick<AuthorityReport, "attention" | "sev
 
 export function deriveWorkerName(report: AuthorityReport) {
   if (report.cleanup?.worker?.name) return report.cleanup.worker.name;
-  return report.status === "ASSIGNED" || report.status === "IN_PROGRESS" ? "Unassigned" : "Not assigned";
+  return report.status === "ASSIGNED" || report.status === "IN_PROGRESS"
+    ? "Unassigned"
+    : "Not assigned";
 }
 
 export function deriveCleanupState(report: AuthorityReport) {
-  if (report.cleanup?.status === "COMPLETED") return "Waiting for citizen review";
+  if (report.cleanup?.status === "COMPLETED")
+    return "Waiting for citizen review";
   if (report.cleanup?.status === "IN_PROGRESS") return "Cleanup in progress";
   if (report.cleanup?.status === "ASSIGNED") return "Worker assigned";
   return "Awaiting assignment";
 }
 
 export function deriveCitizenVerificationState(report: AuthorityReport) {
-  if (report.verification?.result === "VERIFIED" || report.status === "VERIFIED") return "Verified by citizen";
-  if (report.verification?.result === "DISPUTED" || report.status === "DISPUTED") return "Disputed by citizen";
+  if (
+    report.verification?.result === "VERIFIED" ||
+    report.status === "VERIFIED"
+  )
+    return "Verified by citizen";
+  if (
+    report.verification?.result === "DISPUTED" ||
+    report.status === "DISPUTED"
+  )
+    return "Disputed by citizen";
   if (report.status === "RESOLVED") return "Pending citizen response";
   return "Not ready";
 }

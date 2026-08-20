@@ -15,12 +15,23 @@ type AuthoritySessionUser = {
   isActive?: boolean;
 };
 
-export function useAuthoritySession() {
+type AuthoritySessionState = {
+  data: { session: { token: string }; user: AuthoritySessionUser } | null;
+  isPending: boolean;
+  error: Error | null;
+  token: string | null;
+  user: AuthoritySessionUser | null;
+};
+
+export function useAuthoritySession(): AuthoritySessionState {
   const session = authClient.useSession();
+  const data = session.data as AuthoritySessionState["data"];
   return {
-    ...session,
-    token: session.data?.session?.token ?? null,
-    user: (session.data?.user as AuthoritySessionUser | null) ?? null,
+    data,
+    isPending: session.isPending,
+    error: session.error instanceof Error ? session.error : null,
+    token: data?.session.token ?? null,
+    user: data?.user ?? null,
   };
 }
 
@@ -56,7 +67,9 @@ export function useReportActionMutation(token: string | null) {
     onSuccess: async (_report, vars) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["authority", "dashboard"] }),
-        queryClient.invalidateQueries({ queryKey: ["authority", "report", vars.reportId] }),
+        queryClient.invalidateQueries({
+          queryKey: ["authority", "report", vars.reportId],
+        }),
       ]);
     },
   });

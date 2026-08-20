@@ -6,12 +6,10 @@
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
 import * as SecureStore from "expo-secure-store";
-
-const API_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? "http://192.168.1.4:7000";
+import { config } from "@/config/env";
 
 export const authClient = createAuthClient({
-  baseURL: API_URL,
+  baseURL: config.apiUrl,
   plugins: [
     expoClient({
       scheme: "eclean",         // must match app.json "scheme"

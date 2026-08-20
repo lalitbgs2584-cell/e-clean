@@ -1,4 +1,9 @@
-﻿import type { AuthorityDashboardPayload, AuthorityReport, ReportActionType, VerificationResult } from "./shared";
+﻿import type {
+  AuthorityDashboardPayload,
+  AuthorityReport,
+  ReportActionType,
+  VerificationResult,
+} from "./shared";
 
 async function parseJson<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null);
@@ -24,10 +29,16 @@ async function request<T>(path: string, token: string, init?: RequestInit) {
 
 export const authorityApi = {
   dashboard(token: string) {
-    return request<AuthorityDashboardPayload>("/api/authority/dashboard", token);
+    return request<AuthorityDashboardPayload>(
+      "/api/authority/dashboard",
+      token,
+    );
   },
   report(token: string, reportId: string) {
-    return request<AuthorityReport>(`/api/authority/reports/${reportId}`, token);
+    return request<AuthorityReport>(
+      `/api/authority/reports/${reportId}`,
+      token,
+    );
   },
   updateReport(
     token: string,
@@ -40,15 +51,23 @@ export const authorityApi = {
       note?: string;
     },
   ) {
-    return request<AuthorityReport>(`/api/authority/reports/${reportId}`, token, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
+    return request<AuthorityReport>(
+      `/api/authority/reports/${reportId}`,
+      token,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+    );
   },
   provisionAuthority(token: string) {
-    return request<{ id: string; role: string }>("/api/authority/provision", token, {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
+    return request<{ id: string; role: string }>(
+      "/api/authority/provision",
+      token,
+      {
+        method: "POST",
+        body: JSON.stringify({}),
+      },
+    );
   },
 };

@@ -42,7 +42,10 @@ async function getReport(reportId: string) {
   });
 }
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const authResult = await requireAuthoritySession(request);
   if (authResult.response) return authResult.response;
 
@@ -56,7 +59,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return NextResponse.json({ data: serializeReport(report) });
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const authResult = await requireAuthoritySession(request);
   if (authResult.response) return authResult.response;
 
@@ -72,7 +78,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     if (action === "assign") {
       if (!body?.workerId) {
-        return NextResponse.json({ error: "workerId is required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "workerId is required" },
+          { status: 400 },
+        );
       }
 
       const worker = await prisma.user.findFirst({
@@ -80,7 +89,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       });
 
       if (!worker) {
-        return NextResponse.json({ error: "Worker not found" }, { status: 404 });
+        return NextResponse.json(
+          { error: "Worker not found" },
+          { status: 404 },
+        );
       }
 
       await prisma.$transaction([
@@ -117,7 +129,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         },
       });
 
-      await prisma.report.update({ where: { id }, data: { status: "IN_PROGRESS" } });
+      await prisma.report.update({
+        where: { id },
+        data: { status: "IN_PROGRESS" },
+      });
     }
 
     if (action === "complete_cleanup") {
@@ -129,15 +144,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         },
       });
 
-      await prisma.report.update({ where: { id }, data: { status: "CLEANUP_COMPLETED" } });
+      await prisma.report.update({
+        where: { id },
+        data: { status: "CLEANUP_COMPLETED" },
+      });
     }
 
     if (action === "approve_cleanup") {
-      await prisma.report.update({ where: { id }, data: { status: "RESOLVED", resolvedAt: new Date() } });
+      await prisma.report.update({
+        where: { id },
+        data: { status: "RESOLVED", resolvedAt: new Date() },
+      });
     }
 
     if (action === "mark_verified") {
-      await prisma.report.update({ where: { id }, data: { status: "VERIFIED", resolvedAt: new Date() } });
+      await prisma.report.update({
+        where: { id },
+        data: { status: "VERIFIED", resolvedAt: new Date() },
+      });
 
       await prisma.reportVerification.upsert({
         where: { reportId: id },
@@ -155,7 +179,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
 
     if (action === "mark_disputed") {
-      await prisma.report.update({ where: { id }, data: { status: "DISPUTED" } });
+      await prisma.report.update({
+        where: { id },
+        data: { status: "DISPUTED" },
+      });
 
       await prisma.reportVerification.upsert({
         where: { reportId: id },
@@ -174,7 +201,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (action === "link_duplicate") {
       if (!body?.duplicateOfId) {
-        return NextResponse.json({ error: "duplicateOfId is required" }, { status: 400 });
+        return NextResponse.json(
+          { error: "duplicateOfId is required" },
+          { status: 400 },
+        );
       }
 
       await prisma.report.update({
@@ -190,6 +220,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const updated = await getReport(id);
     return NextResponse.json({ data: serializeReport(updated) });
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message ?? "Failed to update report" }, { status: 500 });
+    return NextResponse.json(
+      { error: error?.message ?? "Failed to update report" },
+      { status: 500 },
+    );
   }
 }

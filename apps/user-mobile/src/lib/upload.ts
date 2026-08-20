@@ -3,8 +3,8 @@
  * Attaches the Better Auth session cookie stored in SecureStore.
  */
 import { authClient } from './auth-client';
+import { config } from '@/config/env';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:7000';
 
 export interface PresignedUpload {
   key: string;
@@ -20,7 +20,7 @@ export async function requestPresignedUploads(params: {
   contentType: string;
   count: number;
 }): Promise<PresignedUpload[]> {
-  const res = await fetch(`${API_URL}/api/upload/presign`, {
+  const res = await fetch(`${config.apiUrl}/api/upload/presign`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

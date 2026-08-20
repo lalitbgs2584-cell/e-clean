@@ -1,7 +1,10 @@
+const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://192.168.1.4:7000";
 
+/** Values exposed to the Expo app must use the EXPO_PUBLIC_ prefix. */
 export const config = {
-    expoPublicBaseURL: process.env.EXPO_PUBLIC_API_URL || "http://[IP_ADDRESS]:8081",
-    backendURL: process.env.EXPO_PUBLIC_BACKEND_BASE_URL || process.env.EXPO_PUBLIC_API_URL || "http://[IP_ADDRESS]:7000",
-    cloudfrontDomain: process.env.CLOUDFRONT_DOMAIN || "",
-}
-    
+  apiUrl,
+  // Compatibility aliases while callers are moved to apiUrl.
+  expoPublicBaseURL: apiUrl,
+  backendURL: apiUrl,
+  cloudfrontDomain: process.env.EXPO_PUBLIC_CLOUDFRONT_DOMAIN ?? "",
+};

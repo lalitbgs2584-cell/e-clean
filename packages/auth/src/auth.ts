@@ -1,19 +1,31 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { expo } from "@better-auth/expo";
+import { bearer } from "better-auth/plugins";
 import { prisma } from "db/client";
+import { env } from "./config/env";
 
 export const auth = betterAuth({
-    baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:7000",
-    secret: process.env.BETTER_AUTH_SECRET,
+    baseURL: env.betterAuthUrl,
+    secret: env.betterAuthSecret,
     database: prismaAdapter(prisma, {
         provider: "postgresql",
     }),
     emailAndPassword: {
         enabled: true,
     },
+    // These fields are part of the shared Prisma user record. Declaring them
+    // here makes role checks available to every Better Auth session instead of
+    // relying on untyped client-side data.
+    user: {
+        additionalFields: {
+            role: { type: "string", required: false, defaultValue: "CITIZEN", input: false },
+            zone: { type: "string", required: false, input: false },
+            isActive: { type: "boolean", required: false, defaultValue: true, input: false },
+        },
+    },
     trustedOrigins: [
-        ...(process.env.NODE_ENV === "development" ? [
+        ...(env.nodeEnv === "development" ? [
             "exp://",
             "exp://**",
             "exp://192.168.*.*:*/**",
@@ -38,6 +50,10 @@ export const auth = betterAuth({
         ])
     ],
     plugins: [
+        // Authority API calls carry the current session token as a Bearer
+        // header. Without this plugin Better Auth only looks for a cookie,
+        // which caused the dashboard's repeated 401/login redirect loop.
+        bearer(),
         expo(),
     ],
 });

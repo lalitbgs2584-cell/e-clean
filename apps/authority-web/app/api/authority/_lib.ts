@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from "next/server";
-import { auth } from "auth";
+import { auth } from "@/lib/auth";
 import { prisma } from "db/client";
 import type {
   AuthorityChartSeries,
@@ -13,7 +13,13 @@ import type {
   ReportStatus,
   VerificationResult,
 } from "@/components/authority/shared";
-import { buildTimeline, deriveCitizenVerificationState, deriveCleanupState, deriveWorkerName, getUrgencyLabel } from "@/components/authority/shared";
+import {
+  buildTimeline,
+  deriveCitizenVerificationState,
+  deriveCleanupState,
+  deriveWorkerName,
+  getUrgencyLabel,
+} from "@/components/authority/shared";
 
 export async function requireAuthoritySession(request: Request) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -28,7 +34,10 @@ export async function requireAuthoritySession(request: Request) {
   if ((session.user as any).role !== "AUTHORITY") {
     return {
       session: null,
-      response: NextResponse.json({ error: "Authority access required" }, { status: 403 }),
+      response: NextResponse.json(
+        { error: "Authority access required" },
+        { status: 403 },
+      ),
     };
   }
 
@@ -61,7 +70,9 @@ function serializeMedia(media: any): AuthorityMedia {
   };
 }
 
-function serializeVerification(verification: any): AuthorityVerification | null {
+function serializeVerification(
+  verification: any,
+): AuthorityVerification | null {
   if (!verification) return null;
 
   return {
@@ -84,7 +95,9 @@ function serializeCleanup(cleanup: any): AuthorityCleanup | null {
     completedAt: toIso(cleanup.completedAt),
     worker: serializeUser(cleanup.worker),
     assignedBy: serializeUser(cleanup.assignedByRef ?? cleanup.assignedBy),
-    beforeImage: cleanup.beforeImage ? serializeMedia(cleanup.beforeImage) : null,
+    beforeImage: cleanup.beforeImage
+      ? serializeMedia(cleanup.beforeImage)
+      : null,
     afterImage: cleanup.afterImage ? serializeMedia(cleanup.afterImage) : null,
   };
 }
@@ -124,7 +137,8 @@ export function serializeReport(report: any): AuthorityReport {
           id: report.duplicateOf.id,
           status: report.duplicateOf.status,
           zone: report.duplicateOf.zone ?? null,
-          createdAt: toIso(report.duplicateOf.createdAt) ?? new Date().toISOString(),
+          createdAt:
+            toIso(report.duplicateOf.createdAt) ?? new Date().toISOString(),
         }
       : null,
     duplicates: (report.duplicates ?? []).map((duplicate: any) => ({
@@ -134,10 +148,28 @@ export function serializeReport(report: any): AuthorityReport {
     })),
     timeline: buildTimeline(report.status),
     urgencyLabel: getUrgencyLabel(report),
-    duplicateMatch: report.duplicateOfId ? 100 : Math.min(99, (report.duplicates?.length ?? 0) * 24 + Math.round((report.upvoteCount ?? 0) * 4)),
-    workerName: deriveWorkerName({ ...report, cleanup: serializeCleanup(report.cleanup), verification: serializeVerification(report.verification) }),
-    cleanupState: deriveCleanupState({ ...report, cleanup: serializeCleanup(report.cleanup), verification: serializeVerification(report.verification) }),
-    citizenVerificationState: deriveCitizenVerificationState({ ...report, cleanup: serializeCleanup(report.cleanup), verification: serializeVerification(report.verification) }),
+    duplicateMatch: report.duplicateOfId
+      ? 100
+      : Math.min(
+          99,
+          (report.duplicates?.length ?? 0) * 24 +
+            Math.round((report.upvoteCount ?? 0) * 4),
+        ),
+    workerName: deriveWorkerName({
+      ...report,
+      cleanup: serializeCleanup(report.cleanup),
+      verification: serializeVerification(report.verification),
+    }),
+    cleanupState: deriveCleanupState({
+      ...report,
+      cleanup: serializeCleanup(report.cleanup),
+      verification: serializeVerification(report.verification),
+    }),
+    citizenVerificationState: deriveCitizenVerificationState({
+      ...report,
+      cleanup: serializeCleanup(report.cleanup),
+      verification: serializeVerification(report.verification),
+    }),
   };
 }
 
@@ -147,7 +179,11 @@ function average(values: number[]) {
 }
 
 function sameDay(a: Date, b: Date) {
-  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+  return (
+    a.getUTCFullYear() === b.getUTCFullYear() &&
+    a.getUTCMonth() === b.getUTCMonth() &&
+    a.getUTCDate() === b.getUTCDate()
+  );
 }
 
 function buildDailySeries(reports: any[]): AuthorityChartSeries {
@@ -161,21 +197,36 @@ function buildDailySeries(reports: any[]): AuthorityChartSeries {
   for (let index = days - 1; index >= 0; index -= 1) {
     const cursor = new Date(today);
     cursor.setUTCDate(today.getUTCDate() - index);
-    labels.push(new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(cursor));
+    labels.push(
+      new Intl.DateTimeFormat(undefined, {
+        month: "short",
+        day: "numeric",
+      }).format(cursor),
+    );
 
-    const sameDayReports = reports.filter((report) => sameDay(new Date(report.createdAt), cursor));
-    const sameDayResolved = reports.filter((report) => report.resolvedAt && sameDay(new Date(report.resolvedAt), cursor));
+    const sameDayReports = reports.filter((report) =>
+      sameDay(new Date(report.createdAt), cursor),
+    );
+    const sameDayResolved = reports.filter(
+      (report) =>
+        report.resolvedAt && sameDay(new Date(report.resolvedAt), cursor),
+    );
 
     submitted.push(sameDayReports.length);
     resolved.push(sameDayResolved.length);
-    urgent.push(sameDayReports.filter((report) => report.attention === "URGENT").length);
+    urgent.push(
+      sameDayReports.filter((report) => report.attention === "URGENT").length,
+    );
   }
 
   return { labels, submitted, resolved, urgent };
 }
 
 function buildZones(reports: AuthorityReport[]): AuthorityZone[] {
-  const zoneMap = new Map<string, AuthorityZone & { resolutionDurations: number[] }>();
+  const zoneMap = new Map<
+    string,
+    AuthorityZone & { resolutionDurations: number[] }
+  >();
 
   for (const report of reports) {
     const zone = report.zone ?? "Unzoned";
@@ -189,13 +240,20 @@ function buildZones(reports: AuthorityReport[]): AuthorityZone[] {
       resolutionDurations: [],
     };
 
-    const isOpen = !["RESOLVED", "VERIFIED", "CANCELLED"].includes(report.status);
+    const isOpen = !["RESOLVED", "VERIFIED", "CANCELLED"].includes(
+      report.status,
+    );
     if (isOpen) current.openReports += 1;
     if (report.attention === "URGENT") current.urgentReports += 1;
     if (report.duplicateOfId) current.duplicateReports += 1;
-    if (["RESOLVED", "VERIFIED"].includes(report.status)) current.resolvedReports += 1;
+    if (["RESOLVED", "VERIFIED"].includes(report.status))
+      current.resolvedReports += 1;
     if (report.resolvedAt) {
-      current.resolutionDurations.push((new Date(report.resolvedAt).getTime() - new Date(report.createdAt).getTime()) / 3_600_000);
+      current.resolutionDurations.push(
+        (new Date(report.resolvedAt).getTime() -
+          new Date(report.createdAt).getTime()) /
+          3_600_000,
+      );
     }
 
     zoneMap.set(zone, current);
@@ -206,20 +264,45 @@ function buildZones(reports: AuthorityReport[]): AuthorityZone[] {
       ...zone,
       averageResolutionHours: average(resolutionDurations),
     }))
-    .sort((left, right) => right.openReports + right.urgentReports - (left.openReports + left.urgentReports));
+    .sort(
+      (left, right) =>
+        right.openReports +
+        right.urgentReports -
+        (left.openReports + left.urgentReports),
+    );
 }
 
 function buildWorkers(workers: any[]): any[] {
   return workers.map((worker) => {
     const cleanups = worker.cleanupsDone ?? [];
-    const activeAssignments = cleanups.filter((cleanup: any) => !["COMPLETED", "CANCELLED"].includes(cleanup.status)).length;
-    const completedToday = cleanups.filter((cleanup: any) => cleanup.completedAt && sameDay(new Date(cleanup.completedAt), new Date())).length;
-    const lastActive = cleanups
-      .flatMap((cleanup: any) => [cleanup.startedAt, cleanup.completedAt, cleanup.assignedAt])
-      .filter(Boolean)
-      .sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0] ?? worker.updatedAt;
+    const activeAssignments = cleanups.filter(
+      (cleanup: any) => !["COMPLETED", "CANCELLED"].includes(cleanup.status),
+    ).length;
+    const completedToday = cleanups.filter(
+      (cleanup: any) =>
+        cleanup.completedAt &&
+        sameDay(new Date(cleanup.completedAt), new Date()),
+    ).length;
+    const lastActive =
+      cleanups
+        .flatMap((cleanup: any) => [
+          cleanup.startedAt,
+          cleanup.completedAt,
+          cleanup.assignedAt,
+        ])
+        .filter(Boolean)
+        .sort(
+          (a: string, b: string) =>
+            new Date(b).getTime() - new Date(a).getTime(),
+        )[0] ?? worker.updatedAt;
 
-    const specialties = [...new Set(cleanups.map((cleanup: any) => cleanup.report?.wasteCategory).filter(Boolean))].slice(0, 3);
+    const specialties = [
+      ...new Set(
+        cleanups
+          .map((cleanup: any) => cleanup.report?.wasteCategory)
+          .filter(Boolean),
+      ),
+    ].slice(0, 3);
 
     return {
       id: worker.id,
@@ -315,17 +398,52 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
   const reports: AuthorityReport[] = rawReports.map(serializeReport);
   const workers = buildWorkers(rawWorkers);
   const zones = buildZones(reports);
-  const openReports = reports.filter((report: AuthorityReport) => !["RESOLVED", "VERIFIED", "CANCELLED"].includes(report.status)).length;
-  const urgentReports = reports.filter((report: AuthorityReport) => report.attention === "URGENT").length;
-  const duplicateReports = reports.filter((report: AuthorityReport) => Boolean(report.duplicateOfId)).length;
-  const reviewQueue = reports.filter((report: AuthorityReport) => report.status === "CLEANUP_COMPLETED" || (report.status === "RESOLVED" && !report.verification)).length;
-  const disputedReports = reports.filter((report: AuthorityReport) => report.status === "DISPUTED").length;
-  const openAssignments = workers.reduce((sum, worker) => sum + worker.activeAssignments, 0);
-  const availableWorkers = workers.filter((worker: any) => worker.available).length;
-  const resolvedReports = reports.filter((report: AuthorityReport) => ["RESOLVED", "VERIFIED"].includes(report.status) && report.resolvedAt);
-  const averageResolutionHours = average(resolvedReports.map((report: AuthorityReport) => (new Date(report.resolvedAt as string).getTime() - new Date(report.createdAt).getTime()) / 3_600_000));
-  const onTimeResolved = resolvedReports.filter((report: AuthorityReport) => (new Date(report.resolvedAt as string).getTime() - new Date(report.createdAt).getTime()) <= 48 * 3_600_000).length;
-  const resolutionEfficiency = resolvedReports.length ? Math.round((onTimeResolved / resolvedReports.length) * 100) : 0;
+  const openReports = reports.filter(
+    (report: AuthorityReport) =>
+      !["RESOLVED", "VERIFIED", "CANCELLED"].includes(report.status),
+  ).length;
+  const urgentReports = reports.filter(
+    (report: AuthorityReport) => report.attention === "URGENT",
+  ).length;
+  const duplicateReports = reports.filter((report: AuthorityReport) =>
+    Boolean(report.duplicateOfId),
+  ).length;
+  const reviewQueue = reports.filter(
+    (report: AuthorityReport) =>
+      report.status === "CLEANUP_COMPLETED" ||
+      (report.status === "RESOLVED" && !report.verification),
+  ).length;
+  const disputedReports = reports.filter(
+    (report: AuthorityReport) => report.status === "DISPUTED",
+  ).length;
+  const openAssignments = workers.reduce(
+    (sum, worker) => sum + worker.activeAssignments,
+    0,
+  );
+  const availableWorkers = workers.filter(
+    (worker: any) => worker.available,
+  ).length;
+  const resolvedReports = reports.filter(
+    (report: AuthorityReport) =>
+      ["RESOLVED", "VERIFIED"].includes(report.status) && report.resolvedAt,
+  );
+  const averageResolutionHours = average(
+    resolvedReports.map(
+      (report: AuthorityReport) =>
+        (new Date(report.resolvedAt as string).getTime() -
+          new Date(report.createdAt).getTime()) /
+        3_600_000,
+    ),
+  );
+  const onTimeResolved = resolvedReports.filter(
+    (report: AuthorityReport) =>
+      new Date(report.resolvedAt as string).getTime() -
+        new Date(report.createdAt).getTime() <=
+      48 * 3_600_000,
+  ).length;
+  const resolutionEfficiency = resolvedReports.length
+    ? Math.round((onTimeResolved / resolvedReports.length) * 100)
+    : 0;
   const mostAffectedArea = zones[0]?.zone ?? "All wards";
 
   return {

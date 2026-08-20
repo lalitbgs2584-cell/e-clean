@@ -7,7 +7,9 @@ export const metadata: Metadata = {
   description: "Municipal waste operations command center",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body>
