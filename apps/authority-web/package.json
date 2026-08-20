@@ -11,12 +11,16 @@
   },
   "dependencies": {
     "@repo/ui": "*",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@tanstack/react-query": "^5.101.4",
     "better-auth": "^1.7.1",
     "db": "*",
     "lucide-react": "^1.32.0",
     "next": "^15.1.0",
+    "postcss": "^8.5.26",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
     "@repo/eslint-config": "*",
