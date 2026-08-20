@@ -25,6 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { AuthorityApiError } from "./api";
 import { useAuthorityDashboardQuery, useAuthoritySession, useReportActionMutation } from "./hooks";
 import {
   STATUS_TONES,
@@ -604,7 +605,7 @@ function WorkersPanel({ payload }: { payload: AuthorityDashboardPayload }) {
 
 export default function AuthorityDashboard() {
   const router = useRouter();
-  const { data: session, isPending, token, user } = useAuthoritySession();
+  const { data: session, isPending, token } = useAuthoritySession();
   const dashboardQuery = useAuthorityDashboardQuery(token);
   const actionMutation = useReportActionMutation(token);
   const [page, setPage] = useState<Page>("Overview");
@@ -618,10 +619,11 @@ export default function AuthorityDashboard() {
   const [note, setNote] = useState("");
 
   useEffect(() => {
-    if (!isPending && user && user.role !== "AUTHORITY") {
+    const error = dashboardQuery.error;
+    if (error instanceof AuthorityApiError && error.status === 401) {
       router.replace("/login?access=authority");
     }
-  }, [isPending, router, user]);
+  }, [dashboardQuery.error, router]);
 
   useEffect(() => {
     if (!selectedReportId && dashboardQuery.data?.reports[0]) {
@@ -657,8 +659,11 @@ export default function AuthorityDashboard() {
     }
   }, [selectedReport, selectedReportId]);
 
-  if (isPending || !session || dashboardQuery.isPending || !payload) return <LoadingState />;
-  if (user?.role !== "AUTHORITY") return <AccessDenied email={user?.email ?? session.user.email} onSignOut={signOut} />;
+  if (isPending || !session || dashboardQuery.isPending) return <LoadingState />;
+  if (dashboardQuery.error instanceof AuthorityApiError && dashboardQuery.error.status === 403) {
+    return <AccessDenied email={session.user.email} onSignOut={signOut} />;
+  }
+  if (!payload) return <LoadingState />;
 
   const title = page === "Overview" ? "Authority Dashboard" : page;
 
