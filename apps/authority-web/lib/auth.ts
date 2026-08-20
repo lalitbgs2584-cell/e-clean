@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+<<<<<<< HEAD
 import { bearer } from "better-auth/plugins";
 import { prisma } from "db/client";
 import { env } from "@/config/env";
@@ -36,4 +37,17 @@ export const auth = betterAuth({
     "http://127.0.0.1:3000",
   ],
   plugins: [bearer()],
+=======
+import { nextCookies } from "better-auth/next-js";
+import { prisma } from "db/client";
+
+export const auth = betterAuth({
+  database: prismaAdapter(prisma, {
+    provider: "postgresql",
+  }),
+  emailAndPassword: {
+    enabled: true,
+  },
+  plugins: [nextCookies()],
+>>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
 });

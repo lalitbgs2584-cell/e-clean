@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
+<<<<<<< HEAD
 import { auth } from "@/lib/auth";
+=======
+>>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
 import { prisma } from "db/client";
+import { requireAuthenticatedSession } from "../_lib";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request): Promise<Response> {
+<<<<<<< HEAD
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -60,4 +65,30 @@ export async function POST(request: Request): Promise<Response> {
         : "We could not create this authority account.";
     return NextResponse.json({ error: message }, { status: 422 });
   }
+=======
+  const authResult = await requireAuthenticatedSession(request);
+
+  if (authResult.response) {
+    return authResult.response;
+  }
+
+  const email = authResult.session!.user.email.toLowerCase();
+  if (!email.endsWith(".gov")) {
+    return NextResponse.json({ error: "Authority sign-up requires an official .gov email" }, { status: 403 });
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: authResult.session!.user.id },
+    data: {
+      role: "AUTHORITY",
+      isActive: true,
+    },
+    select: {
+      id: true,
+      role: true,
+    },
+  });
+
+  return NextResponse.json({ data: updated });
+>>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
 }

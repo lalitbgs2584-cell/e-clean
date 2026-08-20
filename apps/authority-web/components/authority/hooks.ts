@@ -16,6 +16,7 @@ type AuthoritySessionUser = {
 };
 
 type AuthoritySessionState = {
+<<<<<<< HEAD
   data: { session: { token: string }; user: AuthoritySessionUser } | null;
   isPending: boolean;
   error: Error | null;
@@ -26,6 +27,24 @@ type AuthoritySessionState = {
 export function useAuthoritySession(): AuthoritySessionState {
   const session = authClient.useSession();
   const data = session.data as AuthoritySessionState["data"];
+=======
+  data: {
+    session?: {
+      token?: string | null;
+    };
+    user: AuthoritySessionUser;
+  } | null;
+  isPending: boolean;
+};
+
+export function useAuthoritySession(): {
+  data: AuthoritySessionState["data"];
+  isPending: boolean;
+  token: string | null;
+  user: AuthoritySessionUser | null;
+} {
+  const session = authClient.useSession() as AuthoritySessionState;
+>>>>>>> eda3e8139a2ce90b795792b55d7493dba77ed185
   return {
     data,
     isPending: session.isPending,
