@@ -100,4 +100,47 @@ export const authorityApi = {
       },
     );
   },
+  workerProfileImageUploadUrl(
+    token: string,
+    workerId: string,
+    mime = "image/jpeg",
+  ) {
+    return request<{ success: boolean; url: string; key: string }>(
+      `/api/authority/workers/${workerId}/profile-image/upload-url`,
+      token,
+      {
+        method: "POST",
+        body: JSON.stringify({ mime }),
+      },
+    );
+  },
+  async assignWorkerProfileImage(
+    token: string,
+    workerId: string,
+    file: File,
+  ) {
+    const presign = await authorityApi.workerProfileImageUploadUrl(
+      token,
+      workerId,
+      file.type || "image/jpeg",
+    );
+
+    const upload = await fetch(presign.url, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "image/jpeg" },
+      body: file,
+    });
+    if (!upload.ok) {
+      throw new AuthorityApiError("Photo upload failed", upload.status);
+    }
+
+    return request<{ success: boolean; data: any }>(
+      `/api/authority/workers/${workerId}/profile-image`,
+      token,
+      {
+        method: "PUT",
+        body: JSON.stringify({ key: presign.key }),
+      },
+    );
+  },
 };

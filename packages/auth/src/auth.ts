@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { expo } from "@better-auth/expo";
 import { bearer } from "better-auth/plugins";
+import { APIError } from "better-auth/api";
 import { prisma } from "db/client";
 import { env } from "./config/env";
 
@@ -22,6 +23,35 @@ export const auth = betterAuth({
             role: { type: "string", required: false, defaultValue: "CITIZEN", input: false },
             zone: { type: "string", required: false, input: false },
             isActive: { type: "boolean", required: false, defaultValue: true, input: false },
+        },
+    },
+    hooks: {
+        // Hard rule: a WORKER's official profile image is assigned only by an
+        // AUTHORITY (the Express backend and the authority portal manage it).
+        // Block Better Auth's generic /update-user path so a worker cannot
+        // bypass the ownership model by writing `image` directly — UI alone
+        // is not sufficient.
+        async before(ctx) {
+            const endpointPath = (ctx as { path?: string }).path ?? "";
+            if (endpointPath !== "/update-user") return;
+            const body = ctx.body as Record<string, unknown> | undefined;
+            if (!body || !("image" in body)) return;
+
+            const hookSession = (ctx as { session?: any }).session;
+            const role: string | undefined =
+                hookSession?.user?.role ??
+                (
+                    await auth.api.getSession({
+                        headers: ctx.headers as Headers,
+                    }).catch(() => null)
+                )?.user?.role;
+
+            if (role === "WORKER") {
+                throw new APIError("FORBIDDEN", {
+                    message:
+                        "Workers cannot modify their official profile image. It is assigned by an authority.",
+                });
+            }
         },
     },
     trustedOrigins: [

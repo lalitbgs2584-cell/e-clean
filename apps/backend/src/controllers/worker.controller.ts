@@ -5,6 +5,7 @@ import { config } from "../config/env";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import s3Client from "../services/s3.service";
+import { profileImageUrl } from "../services/profile-images.service";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -40,6 +41,11 @@ export const getWorkerMe = async (
         role: true,
         zone: true,
         isActive: true,
+        profileImageUploadedById: true,
+        profileImageAssignedAt: true,
+        profileImageUploadedBy: {
+          select: { id: true, name: true },
+        },
         createdAt: true,
       },
     });
@@ -48,7 +54,15 @@ export const getWorkerMe = async (
       return res.status(404).json({ success: false, error: "User not found" });
     }
 
-    return res.json({ success: true, data: user });
+    return res.json({
+      success: true,
+      data: {
+        ...user,
+        // Official avatar is assigned by an authority — the worker only reads
+        // it, so the URL is derived from the stored key via the Profile CDN.
+        profileImageUrl: profileImageUrl(user.image),
+      },
+    });
   } catch (err) {
     console.error("[worker/me]", err);
     return res.status(500).json({ success: false, error: "Server error" });

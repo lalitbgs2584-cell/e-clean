@@ -89,3 +89,19 @@ export function useProvisionAuthorityMutation(token: string | null) {
     mutationFn: () => authorityApi.provisionAuthority(token as string),
   });
 }
+
+export function useAssignWorkerProfileImageMutation(token: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (params: { workerId: string; file: File }) =>
+      authorityApi.assignWorkerProfileImage(
+        token as string,
+        params.workerId,
+        params.file,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["authority", "dashboard"] });
+    },
+  });
+}

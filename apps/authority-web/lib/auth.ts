@@ -1,4 +1,4 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, APIError } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { bearer } from "better-auth/plugins";
 import { nextCookies } from "better-auth/next-js";
@@ -29,6 +29,33 @@ export const auth = betterAuth({
         defaultValue: true,
         input: false,
       },
+    },
+  },
+  hooks: {
+    // A WORKER's official profile image is authority-assigned. Even though
+    // this portal is meant for authorities, its /api/auth surface shares the
+    // same user table and secret, so the same guard is enforced here.
+    async before(ctx) {
+      const endpointPath = (ctx as { path?: string }).path ?? "";
+      if (endpointPath !== "/update-user") return;
+      const body = ctx.body as Record<string, unknown> | undefined;
+      if (!body || !("image" in body)) return;
+
+      const hookSession = (ctx as { session?: any }).session;
+      const role: string | undefined =
+        hookSession?.user?.role ??
+        (
+          await auth.api
+            .getSession({ headers: ctx.headers as Headers })
+            .catch(() => null)
+        )?.user?.role;
+
+      if (role === "WORKER") {
+        throw new APIError("FORBIDDEN", {
+          message:
+            "Workers cannot modify their official profile image. It is assigned by an authority.",
+        });
+      }
     },
   },
   trustedOrigins: [

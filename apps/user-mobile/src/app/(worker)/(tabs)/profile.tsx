@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useSession, signOut } from '@/lib/auth-client';
-import { getCdnUrl } from '@/lib/cdn';
+import { getCdnUrl, getCdnProfileUrl } from '@/lib/cdn';
 import { getWorkerMe, getWorkerStats, type WorkerUser, type WorkerStats } from '@/services/workerService';
 
 // ---- component --------------------------------------------------------------
@@ -36,7 +36,13 @@ export default function WorkerProfileScreen() {
 
   const user = workerUser ?? sessionUser;
   const displayName = user?.name ?? 'Worker';
-  const avatarUrl = getCdnUrl(user?.image) ?? user?.image;
+  // Official avatar: authority-assigned, delivered via the Profile CDN.
+  // Fallbacks only cover legacy session data.
+  const avatarUrl =
+    (user as WorkerUser)?.profileImageUrl ??
+    getCdnProfileUrl(user?.image) ??
+    getCdnUrl(user?.image) ??
+    user?.image;
   const initials = displayName.trim().split(/\s+/).map((p: string) => p[0]).join('').slice(0, 2).toUpperCase();
 
   const successRate =

@@ -17,9 +17,13 @@ export interface WorkerUser {
   name: string;
   email: string;
   image?: string | null;
+  profileImageUrl?: string | null;
   role: string;
   zone?: string | null;
   isActive: boolean;
+  profileImageUploadedById?: string | null;
+  profileImageAssignedAt?: string | null;
+  profileImageUploadedBy?: { id: string; name: string } | null;
   createdAt: string;
 }
 

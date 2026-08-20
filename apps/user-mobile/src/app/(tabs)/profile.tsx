@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,49 @@ import {
   Pressable,
   StatusBar,
   Image,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCitizenStore } from '@/store/citizen-store';
+import { useSession } from '@/lib/auth-client';
+import { getCdnProfileUrl, getCdnUrl } from '@/lib/cdn';
+import {
+  getMyProfile,
+  uploadMyProfileImage,
+  refreshSessionUser,
+} from '@/services/profileService';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { profile } = useCitizenStore();
+  const { profile, setProfile } = useCitizenStore();
+  const { data: session } = useSession();
+
+  const [serverAvatarUrl, setServerAvatarUrl] = useState<string | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  const loadProfile = useCallback(async () => {
+    try {
+      const res = await getMyProfile();
+      setServerAvatarUrl(res.data.profileImageUrl ?? null);
+      setProfile({
+        name: res.data.name || profile.name,
+        email: res.data.email ?? profile.email,
+        avatarUrl: res.data.profileImageUrl ?? '',
+      });
+    } catch (e) {
+      console.warn('[citizen/profile] load error', e);
+    } finally {
+      setLoadingProfile(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
 
   const displayName = profile.name || 'Citizen';
   const initials = displayName
@@ -24,6 +59,41 @@ export default function ProfileScreen() {
     .join('')
     .slice(0, 2)
     .toUpperCase();
+
+  const sessionImage = (session?.user as any)?.image;
+  const avatarUrl =
+    serverAvatarUrl ??
+    getCdnProfileUrl(sessionImage) ??
+    getCdnUrl(sessionImage) ??
+    (profile.avatarUrl || null);
+
+  const handleChangePhoto = async () => {
+    if (uploading) return;
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (result.canceled || !result.assets[0]?.uri) return;
+
+      setUploading(true);
+      try {
+        const updated = await uploadMyProfileImage(result.assets[0].uri);
+        setServerAvatarUrl(updated.profileImageUrl ?? null);
+        setProfile({ avatarUrl: updated.profileImageUrl ?? '' });
+        // Keep the shared Better Auth session fresh with the new image key.
+        await refreshSessionUser();
+      } catch (e: any) {
+        Alert.alert('Upload failed', e?.message ?? 'Could not update your photo.');
+      } finally {
+        setUploading(false);
+      }
+    } catch (e) {
+      console.warn('[citizen/profile] picker error', e);
+    }
+  };
 
   const menuItems = [
     { title: 'My Reports', icon: '📋', route: '/(tabs)/my-reports' },
@@ -45,13 +115,26 @@ export default function ProfileScreen() {
 
         {/* User Card Header */}
         <View style={styles.userCard}>
-          {profile.avatarUrl ? (
-            <Image source={{ uri: profile.avatarUrl }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback]}>
-              <Text style={styles.avatarInitials}>{initials}</Text>
+          <Pressable onPress={handleChangePhoto} disabled={uploading}>
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarFallback]}>
+                {loadingProfile ? (
+                  <ActivityIndicator color="#2E7D4F" size="small" />
+                ) : (
+                  <Text style={styles.avatarInitials}>{initials}</Text>
+                )}
+              </View>
+            )}
+            <View style={styles.avatarBadge}>
+              {uploading ? (
+                <ActivityIndicator color="#FCFEFA" size="small" />
+              ) : (
+                <Text style={styles.avatarBadgeText}>📷</Text>
+              )}
             </View>
-          )}
+          </Pressable>
           <View style={styles.userMeta}>
             <Text style={styles.userName}>{displayName}</Text>
             {profile.email ? (
@@ -129,6 +212,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F0E5',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarBadge: {
+    position: 'absolute',
+    right: 12,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2E7D4F',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FAFBF8',
+  },
+  avatarBadgeText: {
+    fontSize: 11,
   },
   avatarInitials: {
     fontSize: 22,

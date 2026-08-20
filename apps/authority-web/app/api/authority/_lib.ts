@@ -19,6 +19,7 @@ import {
   deriveWorkerName,
   getUrgencyLabel,
 } from "@/components/authority/shared";
+import { profileImageUrl } from "./_s3";
 
 function getBearerToken(request: Request) {
   const authHeader = request.headers.get("authorization") ?? request.headers.get("Authorization");
@@ -103,12 +104,53 @@ function toIso(value: Date | string | null | undefined) {
   return value ? new Date(value).toISOString() : null;
 }
 
+/**
+ * Loads a WORKER by id and verifies the signed-in AUTHORITY is allowed to
+ * manage them. The institutional model uses the shared `zone` jurisdiction
+ * field:
+ *  - an authority WITHOUT a zone acts globally (city-wide/admin officers)
+ *  - an authority WITH a zone manages workers in that same zone, plus
+ *    workers that have no zone assigned yet
+ */
+export async function loadManagedWorker(
+  authority: { zone: string | null },
+  workerId: string,
+): Promise<{ worker: any; error: NextResponse | null }> {
+  const worker = await prisma.user.findUnique({
+    where: { id: workerId },
+  });
+
+  if (!worker || worker.role !== "WORKER") {
+    return {
+      worker: null,
+      error: NextResponse.json({ error: "Worker not found" }, { status: 404 }),
+    };
+  }
+
+  const globalAuthority = !authority.zone;
+  const unzonedWorker = !worker.zone;
+  const inSameZone = !!authority.zone && authority.zone === worker.zone;
+
+  if (!globalAuthority && !unzonedWorker && !inSameZone) {
+    return {
+      worker,
+      error: NextResponse.json(
+        { error: "This worker is outside your zone" },
+        { status: 403 },
+      ),
+    };
+  }
+
+  return { worker, error: null };
+}
+
 function serializeUser(user: any): AuthorityUser {
   return {
     id: user.id,
     name: user.name,
     email: user.email,
     image: user.image ?? null,
+    profileImageUrl: profileImageUrl(user.image),
     role: user.role,
     zone: user.zone ?? null,
     isActive: user.isActive ?? true,
@@ -365,6 +407,9 @@ function buildWorkers(workers: any[]): any[] {
       email: worker.email,
       zone: worker.zone ?? null,
       image: worker.image ?? null,
+      profileImageUrl: profileImageUrl(worker.image),
+      imageAssignedBy: worker.profileImageUploadedBy ?? null,
+      imageAssignedAt: toIso(worker.profileImageAssignedAt),
       isActive: worker.isActive,
       available: worker.isActive && activeAssignments < 2,
       workload: activeAssignments,
@@ -418,6 +463,9 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
       where: { role: "WORKER" },
       orderBy: { updatedAt: "desc" },
       include: {
+        profileImageUploadedBy: {
+          select: { id: true, name: true },
+        },
         cleanupsDone: {
           include: {
             report: {

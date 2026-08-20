@@ -43,6 +43,7 @@ export type AuthorityUser = {
   name: string;
   email: string;
   image: string | null;
+  profileImageUrl: string | null;
   role: "CITIZEN" | "WORKER" | "AUTHORITY" | "RECYCLING_PARTNER";
   zone: string | null;
   isActive: boolean;
@@ -122,6 +123,9 @@ export type AuthorityWorker = {
   email: string;
   zone: string | null;
   image: string | null;
+  profileImageUrl: string | null;
+  imageAssignedBy: { id: string; name: string } | null;
+  imageAssignedAt: string | null;
   isActive: boolean;
   available: boolean;
   workload: number;

@@ -157,6 +157,20 @@ model User {
   recyclingPartnerId String?
   recyclingPartner   RecyclingPartner? @relation(fields: [recyclingPartnerId], references: [id])
 
+  // ---- profile image ownership ----
+  // `image` (above) is the single source of truth for the profile image and
+  // holds the object key in the `profile` bucket (e.g. "profile/{userId}/avatar.jpg").
+  // It is rendered through the Profile CDN by the clients — never stored as a URL.
+  //
+  // For CITIZEN/AUTHORITY users the image is self-managed, so
+  // profileImageUploadedById is either null or their own id. For WORKER users
+  // the official image is assigned by an AUTHORITY and this column records
+  // which authority assigned it (owner = worker, assigner = authority).
+  profileImageUploadedById String?
+  profileImageUploadedBy   User?   @relation("ProfileImageUploadedBy", fields: [profileImageUploadedById], references: [id], onDelete: SetNull)
+  profileImageAssignedTo   User[]  @relation("ProfileImageUploadedBy")
+  profileImageAssignedAt   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

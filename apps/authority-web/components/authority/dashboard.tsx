@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   Download,
   FileWarning,
   Filter,
+  ImagePlus,
   Leaf,
   LocateFixed,
   MapPinned,
@@ -28,6 +29,7 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { AuthorityApiError, authorityApi } from "./api";
 import {
+  useAssignWorkerProfileImageMutation,
   useAuthorityDashboardQuery,
   useAuthoritySession,
   useReportActionMutation,
@@ -41,6 +43,7 @@ import {
   getUrgencyLabel,
   type AuthorityDashboardPayload,
   type AuthorityReport,
+  type AuthorityWorker,
   type ReportActionType,
 } from "./shared";
 import { ReportTimeline } from "./report-timeline";
@@ -1183,6 +1186,52 @@ function AddUserModal({
   );
 }
 
+function WorkerAvatar({ worker }: { worker: AuthorityWorker }) {
+  const initials =
+    worker.name
+      .split(/\s+/)
+      .map((p) => p[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "W";
+
+  if (worker.profileImageUrl) {
+    return (
+      <img
+        src={worker.profileImageUrl}
+        alt={worker.name}
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: "50%",
+          objectFit: "cover",
+          border: "1px solid var(--border, #DCE3D8)",
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: "50%",
+        background: "#E8F0E5",
+        color: "#2E7D4F",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontWeight: 700,
+        fontSize: 13,
+      }}
+      title="No official photo assigned"
+    >
+      {initials}
+    </div>
+  );
+}
+
 function WorkersPanel({
   payload,
   onAddUser,
@@ -1190,18 +1239,64 @@ function WorkersPanel({
   payload: AuthorityDashboardPayload;
   onAddUser: () => void;
 }) {
+  const { token } = useAuthoritySession();
+  const assignImage = useAssignWorkerProfileImageMutation(token);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingWorkerId, setPendingWorkerId] = useState<string | null>(null);
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !pendingWorkerId) return;
+    if (!file.type.startsWith("image/")) {
+      setAssignError("Please choose an image file.");
+      return;
+    }
+    setAssignError(null);
+    assignImage.mutate(
+      { workerId: pendingWorkerId, file },
+      {
+        onError: (err: Error) => {
+          setAssignError(err.message || "Could not assign worker photo.");
+        },
+      },
+    );
+  };
+
+  const startAssign = (workerId: string) => {
+    setPendingWorkerId(workerId);
+    fileInputRef.current?.click();
+  };
+
   return (
     <article className="card table-card">
       <div className="card-title">
         <div>
           <h2>Field workforce</h2>
-          <p>Availability, workload, and operational performance.</p>
+          <p>
+            Availability, workload, and operational performance. Official
+            worker photos are managed here — workers cannot change their own
+            photo.
+          </p>
         </div>
         <button className="button primary" onClick={onAddUser}>
           <UserPlus size={16} style={{ marginRight: 6 }} />
           Add member
         </button>
       </div>
+      {assignError ? (
+        <p style={{ color: "#D64545", margin: "0 0 12px", fontSize: 13 }}>
+          {assignError}
+        </p>
+      ) : null}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg"
+        style={{ display: "none" }}
+        onChange={handleFile}
+      />
       <div className="table-wrap">
         <table>
           <thead>
@@ -1212,14 +1307,20 @@ function WorkersPanel({
               <th>Active assignments</th>
               <th>Completed today</th>
               <th>Specialties</th>
+              <th>Photo</th>
             </tr>
           </thead>
           <tbody>
             {payload.workers.map((worker) => (
               <tr key={worker.id}>
                 <td>
-                  <b>{worker.name}</b>
-                  <small className="cell-sub">{worker.email}</small>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <WorkerAvatar worker={worker} />
+                    <div>
+                      <b>{worker.name}</b>
+                      <small className="cell-sub">{worker.email}</small>
+                    </div>
+                  </div>
                 </td>
                 <td>
                   <Pill tone={worker.available ? "mint" : "amber"}>
@@ -1233,6 +1334,27 @@ function WorkersPanel({
                   {worker.specialties.length
                     ? worker.specialties.join(", ")
                     : "General cleanup"}
+                </td>
+                <td>
+                  {worker.imageAssignedBy ? (
+                    <small className="cell-sub" style={{ display: "block" }}>
+                      Assigned by {worker.imageAssignedBy.name}
+                      {worker.imageAssignedAt
+                        ? ` · ${formatRelativeTime(worker.imageAssignedAt)}`
+                        : ""}
+                    </small>
+                  ) : (
+                    <small className="cell-sub">No official photo</small>
+                  )}
+                  <button
+                    className="button ghost"
+                    style={{ padding: "4px 8px", fontSize: 12, marginTop: 4 }}
+                    disabled={assignImage.isPending}
+                    onClick={() => startAssign(worker.id)}
+                  >
+                    <ImagePlus size={14} style={{ marginRight: 4 }} />
+                    {worker.image ? "Replace photo" : "Assign photo"}
+                  </button>
                 </td>
               </tr>
             ))}

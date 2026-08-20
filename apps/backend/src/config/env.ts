@@ -13,6 +13,7 @@ export const config = {
   s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY || "",
   s3PublicUrl: process.env.S3_PUBLIC_URL || "",
   cloudfrontDomain: process.env.CLOUDFRONT_DOMAIN || "",
+  cloudfrontProfileDomain: process.env.CLOUDFRONT_PROFILE_DOMAIN || "",
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
   openaiApiKey: process.env.OPENAI_API_KEY || "",
 };
