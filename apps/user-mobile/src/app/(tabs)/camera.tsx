@@ -7,7 +7,6 @@ import {
   Pressable,
   Image,
   StatusBar,
-  Alert,
   ActivityIndicator,
   Modal,
   TextInput,
@@ -41,6 +40,7 @@ import { config } from "@/config/env";
 import { authClient } from "@/lib/auth-client";
 import { uploadReportPhoto } from "@/lib/upload";
 import { generateUUID } from "@/lib/utilities";
+import { useAppModal } from "@/hooks/useAppModal";
 
 const MAX_PHOTOS = 2;
 
@@ -71,6 +71,13 @@ type CapturedImage = {
 };
 
 export default function ReportSubmissionScreen() {
+  const { showModal } = useAppModal();
+  const alert = (title: string, message: string) =>
+    showModal({
+      variant: title === "Error" ? "error" : "info",
+      title,
+      message,
+    });
   const router = useRouter();
   const { data: sessionData } = authClient.useSession();
   const { createNewReport } = useCitizenStore();
@@ -174,13 +181,13 @@ export default function ReportSubmissionScreen() {
   // ----------------------------------------------------
   const handleOpenLiveCamera = async () => {
     if (draft.photos.length >= MAX_PHOTOS) {
-      Alert.alert("Maximum reached", "You can upload up to 2 photos only.");
+      alert("Maximum reached", "You can upload up to 2 photos only.");
       return;
     }
     if (!cameraPermission?.granted) {
       const res = await requestCameraPermission();
       if (!res.granted) {
-        Alert.alert(
+        alert(
           "Camera Permission",
           "Please allow camera access in device settings to take photos of waste.",
         );
@@ -226,10 +233,7 @@ export default function ReportSubmissionScreen() {
         setIsCameraModalOpen(false);
       }
     } catch {
-      Alert.alert(
-        "Capture failed",
-        "Could not capture photo. Please try again.",
-      );
+      alert("Capture failed", "Could not capture photo. Please try again.");
     } finally {
       setCameraCapturing(false);
       setIsSubmitting(false);
@@ -238,7 +242,7 @@ export default function ReportSubmissionScreen() {
 
   const handleGalleryPick = async () => {
     if (draft.photos.length >= MAX_PHOTOS) {
-      Alert.alert("Maximum reached", "You can upload up to 2 photos only.");
+      alert("Maximum reached", "You can upload up to 2 photos only.");
       return;
     }
     setIsSubmitting(true);
@@ -284,7 +288,7 @@ export default function ReportSubmissionScreen() {
         }
       }
     } catch {
-      Alert.alert("Gallery error", "Could not access device photos.");
+      alert("Gallery error", "Could not access device photos.");
     } finally {
       setIsSubmitting(false);
     }
@@ -333,7 +337,7 @@ export default function ReportSubmissionScreen() {
       );
       goToStep(5);
     } catch {
-      Alert.alert("Error", "Submission failed. Please try again.");
+      alert("Error", "Submission failed. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -370,10 +374,10 @@ export default function ReportSubmissionScreen() {
         updateDraft({ duplicateChoice: "none" });
         goToStep(2);
       } else {
-        Alert.alert("Error", data.message || "Failed to check nearby reports.");
+        alert("Error", data.message || "Failed to check nearby reports.");
       }
     } catch {
-      Alert.alert(
+      alert(
         "Error",
         "Failed to find nearby reports. Please check your network and try again.",
       );
@@ -390,7 +394,7 @@ export default function ReportSubmissionScreen() {
 
   const handleResponseFromAI = async () => {
     if (draft.photos.length === 0 || !originalImage || !pendingReportId) {
-      Alert.alert("Photo required", "Please take or choose at least 1 photo.");
+      alert("Photo required", "Please take or choose at least 1 photo.");
       return;
     }
     setIsSubmitting(true);
@@ -443,7 +447,7 @@ export default function ReportSubmissionScreen() {
     } catch (error) {
       console.error("Error submitting AI report:", error);
 
-      Alert.alert(
+      alert(
         "Error",
         error instanceof Error
           ? error.message
@@ -536,59 +540,59 @@ export default function ReportSubmissionScreen() {
           </View>
         </View>
 
-          <Text style={styles.successTitle}>Report Submitted!</Text>
-          <Text style={styles.successSubtitle}>
-            Thank you for helping keep our city clean.
-          </Text>
+        <Text style={styles.successTitle}>Report Submitted!</Text>
+        <Text style={styles.successSubtitle}>
+          Thank you for helping keep our city clean.
+        </Text>
 
-          {/* Report ID Card */}
-          <View style={styles.reportIdCard}>
-            <Text style={styles.reportIdLabel}>Your Report ID</Text>
-            <View style={styles.reportIdRow}>
-              <Text style={styles.reportIdText}>{reportId}</Text>
-              <Pressable style={styles.copyBtn} onPress={handleCopyReportId}>
-                <Text style={styles.copyBtnText}>📋 Copy</Text>
-              </Pressable>
-            </View>
-            {copiedToast && (
-              <Animated.Text
-                entering={FadeIn}
-                exiting={FadeOut}
-                style={styles.copiedBadge}
-              >
-                ✓ Copied to clipboard!
-              </Animated.Text>
-            )}
+        {/* Report ID Card */}
+        <View style={styles.reportIdCard}>
+          <Text style={styles.reportIdLabel}>Your Report ID</Text>
+          <View style={styles.reportIdRow}>
+            <Text style={styles.reportIdText}>{reportId}</Text>
+            <Pressable style={styles.copyBtn} onPress={handleCopyReportId}>
+              <Text style={styles.copyBtnText}>📋 Copy</Text>
+            </Pressable>
           </View>
+          {copiedToast && (
+            <Animated.Text
+              entering={FadeIn}
+              exiting={FadeOut}
+              style={styles.copiedBadge}
+            >
+              ✓ Copied to clipboard!
+            </Animated.Text>
+          )}
+        </View>
 
-          {/* What Happens Next Card */}
-          <View style={styles.nextStepsCard}>
-            <Text style={styles.nextStepsHeader}>What happens next?</Text>
-            <View style={styles.nextStepItem}>
-              <View style={styles.stepCheckCircle}>
-                <Text style={styles.stepCheckText}>✓</Text>
-              </View>
-              <Text style={styles.nextStepDesc}>
-                Our AI will analyze your report
-              </Text>
+        {/* What Happens Next Card */}
+        <View style={styles.nextStepsCard}>
+          <Text style={styles.nextStepsHeader}>What happens next?</Text>
+          <View style={styles.nextStepItem}>
+            <View style={styles.stepCheckCircle}>
+              <Text style={styles.stepCheckText}>✓</Text>
             </View>
-            <View style={styles.nextStepItem}>
-              <View style={styles.stepCheckCircle}>
-                <Text style={styles.stepCheckText}>✓</Text>
-              </View>
-              <Text style={styles.nextStepDesc}>
-                It will be reviewed by the authority
-              </Text>
-            </View>
-            <View style={styles.nextStepItem}>
-              <View style={styles.stepCheckCircle}>
-                <Text style={styles.stepCheckText}>✓</Text>
-              </View>
-              <Text style={styles.nextStepDesc}>
-                You will be notified about the progress
-              </Text>
-            </View>
+            <Text style={styles.nextStepDesc}>
+              Our AI will analyze your report
+            </Text>
           </View>
+          <View style={styles.nextStepItem}>
+            <View style={styles.stepCheckCircle}>
+              <Text style={styles.stepCheckText}>✓</Text>
+            </View>
+            <Text style={styles.nextStepDesc}>
+              It will be reviewed by the authority
+            </Text>
+          </View>
+          <View style={styles.nextStepItem}>
+            <View style={styles.stepCheckCircle}>
+              <Text style={styles.stepCheckText}>✓</Text>
+            </View>
+            <Text style={styles.nextStepDesc}>
+              You will be notified about the progress
+            </Text>
+          </View>
+        </View>
       </ContentWithBottomBar>
     );
   }
@@ -628,18 +632,15 @@ export default function ReportSubmissionScreen() {
         (() => {
           const isDuplicateFound = Boolean(
             nearbyApiResponse?.hasNearbyReport &&
-              (nearbyApiResponse.closestReport ||
-                nearbyApiResponse.reports?.length > 0),
+            (nearbyApiResponse.closestReport ||
+              nearbyApiResponse.reports?.length > 0),
           );
 
           return (
             <>
               {(!isDuplicateFound ||
                 draft.duplicateChoice === "different_issue") && (
-                <Pressable
-                  style={styles.primaryBtn}
-                  onPress={moveToPhotoStep}
-                >
+                <Pressable style={styles.primaryBtn} onPress={moveToPhotoStep}>
                   <Text style={styles.primaryBtnText}>
                     Continue to Photos →
                   </Text>
@@ -677,19 +678,14 @@ export default function ReportSubmissionScreen() {
               <Text style={styles.primaryBtnText}>Analyzing with AI...</Text>
             </View>
           ) : (
-            <Text style={styles.primaryBtnText}>
-              Send for AI Assessment →
-            </Text>
+            <Text style={styles.primaryBtnText}>Send for AI Assessment →</Text>
           )}
         </Pressable>
       )}
 
       {step === 4 && (
         <Pressable
-          style={[
-            styles.primaryBtn,
-            isSubmitting && styles.primaryBtnDisabled,
-          ]}
+          style={[styles.primaryBtn, isSubmitting && styles.primaryBtnDisabled]}
           onPress={handleSubmitReport}
           disabled={isSubmitting}
         >
@@ -832,539 +828,530 @@ export default function ReportSubmissionScreen() {
       footer={bottomActionBar}
       items={overlays}
     >
-        {/* ======================================================== */}
-        {/* STEP 1: LOCATION */}
-        {/* ======================================================== */}
-        {step === 1 && (
-          <View style={styles.stepContainer}>
-            {/* Map Placeholder Component */}
-            <MapPlaceholder
-              latitude={draft.latitude}
-              longitude={draft.longitude}
-              accuracyMeters={draft.accuracyMeters}
-              height={230}
-            />
+      {/* ======================================================== */}
+      {/* STEP 1: LOCATION */}
+      {/* ======================================================== */}
+      {step === 1 && (
+        <View style={styles.stepContainer}>
+          {/* Map Placeholder Component */}
+          <MapPlaceholder
+            latitude={draft.latitude}
+            longitude={draft.longitude}
+            accuracyMeters={draft.accuracyMeters}
+            height={230}
+          />
 
-            {/* Permission Denied Warning */}
-            {!locationPermGranted && (
-              <View style={styles.permissionNoticeBox}>
-                <Text style={styles.permissionNoticeText}>
-                  Location access is currently denied. Enable GPS for precise
-                  municipal dispatch.
-                </Text>
-                <Pressable
-                  style={styles.enablePermBtn}
-                  onPress={requestLocationPerm}
-                >
-                  <Text style={styles.enablePermBtnText}>Enable Location</Text>
-                </Pressable>
+          {/* Permission Denied Warning */}
+          {!locationPermGranted && (
+            <View style={styles.permissionNoticeBox}>
+              <Text style={styles.permissionNoticeText}>
+                Location access is currently denied. Enable GPS for precise
+                municipal dispatch.
+              </Text>
+              <Pressable
+                style={styles.enablePermBtn}
+                onPress={requestLocationPerm}
+              >
+                <Text style={styles.enablePermBtnText}>Enable Location</Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Current Location Detail Card */}
+          <View style={styles.locationDetailCard}>
+            <View style={styles.locCardTop}>
+              <View style={styles.locIconBubble}>
+                <Text style={{ fontSize: 18 }}>📍</Text>
               </View>
-            )}
-
-            {/* Current Location Detail Card */}
-            <View style={styles.locationDetailCard}>
-              <View style={styles.locCardTop}>
-                <View style={styles.locIconBubble}>
-                  <Text style={{ fontSize: 18 }}>📍</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.locCardTitle}>Current Location</Text>
-                  {isLocationLoading ? (
-                    <ActivityIndicator
-                      size="small"
-                      color="#2E7D4F"
-                      style={{ alignSelf: "flex-start", marginTop: 4 }}
-                    />
-                  ) : (
-                    <Text style={styles.locAddressText}>
-                      {draft.formattedAddress || draft.location}
-                    </Text>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.locMetaRow}>
-                <View style={styles.accuracyPill}>
-                  <Text style={styles.accuracyPillText}>
-                    Accuracy: ±{draft.accuracyMeters ?? 10}m
+              <View style={{ flex: 1 }}>
+                <Text style={styles.locCardTitle}>Current Location</Text>
+                {isLocationLoading ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#2E7D4F"
+                    style={{ alignSelf: "flex-start", marginTop: 4 }}
+                  />
+                ) : (
+                  <Text style={styles.locAddressText}>
+                    {draft.formattedAddress || draft.location}
                   </Text>
-                </View>
-                <Text style={styles.gpsCoordsText}>
-                  {draft.latitude?.toFixed(4)}, {draft.longitude?.toFixed(4)}
-                </Text>
-              </View>
-
-              <View style={styles.locActionsDivider} />
-
-              {/* Adjust / Refresh actions */}
-              <View style={styles.locActionsRow}>
-                <Pressable
-                  style={styles.locActionBtn}
-                  onPress={() => refreshLocation()}
-                >
-                  <Text style={styles.locActionBtnText}>
-                    🔄 Use Current Location
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[styles.locActionBtn, styles.locActionBtnSecondary]}
-                  onPress={() => {
-                    setManualAddressInput(draft.location);
-                    setIsAdjustingLocation(true);
-                  }}
-                >
-                  <Text style={styles.locActionBtnTextSecondary}>
-                    ✏️ Adjust Location
-                  </Text>
-                </Pressable>
+                )}
               </View>
             </View>
 
-            {/* Manual Location Adjust Modal */}
-            <Modal
-              visible={isAdjustingLocation}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setIsAdjustingLocation(false)}
-            >
-              <View style={styles.adjustModalBackdrop}>
-                <View style={styles.adjustModalCard}>
-                  <Text style={styles.adjustModalTitle}>
-                    Adjust Issue Address
-                  </Text>
-                  <Text style={styles.adjustModalSub}>
-                    Enter nearby landmark or specific street details
-                  </Text>
-                  <TextInput
-                    style={styles.adjustInput}
-                    value={manualAddressInput}
-                    onChangeText={setManualAddressInput}
-                    placeholder="e.g. Near Gate 3, Green Park Main Road"
-                    placeholderTextColor="#8A998E"
-                  />
-                  <View style={styles.adjustModalActions}>
-                    <Pressable
-                      style={styles.adjustCancelBtn}
-                      onPress={() => setIsAdjustingLocation(false)}
-                    >
-                      <Text style={styles.adjustCancelText}>Cancel</Text>
-                    </Pressable>
-                    <Pressable
-                      style={styles.adjustSaveBtn}
-                      onPress={() => {
-                        if (manualAddressInput.trim()) {
-                          updateDraft({
-                            location: manualAddressInput.trim(),
-                            formattedAddress: manualAddressInput.trim(),
-                          });
-                        }
-                        setIsAdjustingLocation(false);
-                      }}
-                    >
-                      <Text style={styles.adjustSaveText}>Update</Text>
-                    </Pressable>
-                  </View>
+            <View style={styles.locMetaRow}>
+              <View style={styles.accuracyPill}>
+                <Text style={styles.accuracyPillText}>
+                  Accuracy: ±{draft.accuracyMeters ?? 10}m
+                </Text>
+              </View>
+              <Text style={styles.gpsCoordsText}>
+                {draft.latitude?.toFixed(4)}, {draft.longitude?.toFixed(4)}
+              </Text>
+            </View>
+
+            <View style={styles.locActionsDivider} />
+
+            {/* Adjust / Refresh actions */}
+            <View style={styles.locActionsRow}>
+              <Pressable
+                style={styles.locActionBtn}
+                onPress={() => refreshLocation()}
+              >
+                <Text style={styles.locActionBtnText}>
+                  🔄 Use Current Location
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.locActionBtn, styles.locActionBtnSecondary]}
+                onPress={() => {
+                  setManualAddressInput(draft.location);
+                  setIsAdjustingLocation(true);
+                }}
+              >
+                <Text style={styles.locActionBtnTextSecondary}>
+                  ✏️ Adjust Location
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          {/* Manual Location Adjust Modal */}
+          <Modal
+            visible={isAdjustingLocation}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setIsAdjustingLocation(false)}
+          >
+            <View style={styles.adjustModalBackdrop}>
+              <View style={styles.adjustModalCard}>
+                <Text style={styles.adjustModalTitle}>
+                  Adjust Issue Address
+                </Text>
+                <Text style={styles.adjustModalSub}>
+                  Enter nearby landmark or specific street details
+                </Text>
+                <TextInput
+                  style={styles.adjustInput}
+                  value={manualAddressInput}
+                  onChangeText={setManualAddressInput}
+                  placeholder="e.g. Near Gate 3, Green Park Main Road"
+                  placeholderTextColor="#8A998E"
+                />
+                <View style={styles.adjustModalActions}>
+                  <Pressable
+                    style={styles.adjustCancelBtn}
+                    onPress={() => setIsAdjustingLocation(false)}
+                  >
+                    <Text style={styles.adjustCancelText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.adjustSaveBtn}
+                    onPress={() => {
+                      if (manualAddressInput.trim()) {
+                        updateDraft({
+                          location: manualAddressInput.trim(),
+                          formattedAddress: manualAddressInput.trim(),
+                        });
+                      }
+                      setIsAdjustingLocation(false);
+                    }}
+                  >
+                    <Text style={styles.adjustSaveText}>Update</Text>
+                  </Pressable>
                 </View>
               </View>
-            </Modal>
-          </View>
-        )}
+            </View>
+          </Modal>
+        </View>
+      )}
 
-        {/* ======================================================== */}
-        {/* STEP 2: DUPLICATE / NEARBY REPORT DETECTION (location-based) */}
-        {/* ======================================================== */}
-        {step === 2 &&
-          (() => {
-            const isDuplicateFound = Boolean(
-              nearbyApiResponse?.hasNearbyReport &&
-              (nearbyApiResponse.closestReport ||
-                nearbyApiResponse.reports?.length > 0),
-            );
+      {/* ======================================================== */}
+      {/* STEP 2: DUPLICATE / NEARBY REPORT DETECTION (location-based) */}
+      {/* ======================================================== */}
+      {step === 2 &&
+        (() => {
+          const isDuplicateFound = Boolean(
+            nearbyApiResponse?.hasNearbyReport &&
+            (nearbyApiResponse.closestReport ||
+              nearbyApiResponse.reports?.length > 0),
+          );
 
-            const activeDuplicateReport = isDuplicateFound
-              ? nearbyApiResponse?.closestReport
-                ? {
-                    id: nearbyApiResponse.closestReport.id,
-                    wasteType:
-                      nearbyApiResponse.closestReport.wasteCategory ||
-                      nearbyApiResponse.closestReport.dumpType ||
-                      "Waste Issue",
-                    locationName:
-                      draft.formattedAddress ||
-                      draft.location ||
-                      "Nearby Location",
-                    distanceMeters:
-                      nearbyApiResponse.closestReport.distanceMeters ?? 0,
-                    distanceFormatted: `${nearbyApiResponse.closestReport.distanceMeters ?? 0}m away`,
-                    reportedTimeAgo: "Recently reported",
-                    reportedTimestamp: new Date(
-                      nearbyApiResponse.closestReport.createdAt,
-                    ).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }),
-                    imageUrl:
-                      "https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=400&q=80",
-                    similarityScore: 92,
-                    status:
-                      nearbyApiResponse.closestReport.status || "Reported",
-                    description:
-                      nearbyApiResponse.closestReport.description ||
-                      "Active waste issue reported in this vicinity.",
-                  }
-                : null
-              : null;
+          const activeDuplicateReport = isDuplicateFound
+            ? nearbyApiResponse?.closestReport
+              ? {
+                  id: nearbyApiResponse.closestReport.id,
+                  wasteType:
+                    nearbyApiResponse.closestReport.wasteCategory ||
+                    nearbyApiResponse.closestReport.dumpType ||
+                    "Waste Issue",
+                  locationName:
+                    draft.formattedAddress ||
+                    draft.location ||
+                    "Nearby Location",
+                  distanceMeters:
+                    nearbyApiResponse.closestReport.distanceMeters ?? 0,
+                  distanceFormatted: `${nearbyApiResponse.closestReport.distanceMeters ?? 0}m away`,
+                  reportedTimeAgo: "Recently reported",
+                  reportedTimestamp: new Date(
+                    nearbyApiResponse.closestReport.createdAt,
+                  ).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                  imageUrl:
+                    "https://images.unsplash.com/photo-1530587191325-3db32d826c18?auto=format&fit=crop&w=400&q=80",
+                  similarityScore: 92,
+                  status: nearbyApiResponse.closestReport.status || "Reported",
+                  description:
+                    nearbyApiResponse.closestReport.description ||
+                    "Active waste issue reported in this vicinity.",
+                }
+              : null
+            : null;
 
-            return (
-              <View style={styles.stepContainer}>
-                {isDuplicateFound && activeDuplicateReport ? (
-                  /* Scenario A: Duplicate Found */
-                  <View style={{ gap: 16 }}>
-                    <DuplicateReportCard
-                      report={activeDuplicateReport}
-                      selectedChoice={draft.duplicateChoice}
-                      onSelectChoice={(choice) =>
-                        updateDraft({ duplicateChoice: choice })
-                      }
-                      userLocationName={draft.location}
-                    />
+          return (
+            <View style={styles.stepContainer}>
+              {isDuplicateFound && activeDuplicateReport ? (
+                /* Scenario A: Duplicate Found */
+                <View style={{ gap: 16 }}>
+                  <DuplicateReportCard
+                    report={activeDuplicateReport}
+                    selectedChoice={draft.duplicateChoice}
+                    onSelectChoice={(choice) =>
+                      updateDraft({ duplicateChoice: choice })
+                    }
+                    userLocationName={draft.location}
+                  />
 
-                    {/* If user confirms "Yes, same issue" */}
-                    {draft.duplicateChoice === "same_issue" && (
-                      <Animated.View
-                        entering={FadeIn}
-                        style={styles.duplicateConfirmedBox}
-                      >
-                        <Text style={styles.duplicateConfirmedTitle}>
-                          This issue is already reported
-                        </Text>
-                        <Text style={styles.duplicateConfirmedText}>
-                          Submitting another report could create a duplicate.
-                          You can upvote or track the existing report, or report
-                          anyway.
-                        </Text>
-                        <View style={styles.duplicateActionsRow}>
-                          <Pressable
-                            style={styles.viewExistingBtn}
-                            onPress={() => router.push("/(tabs)/my-reports")}
-                          >
-                            <Text style={styles.viewExistingBtnText}>
-                              View Existing Report
-                            </Text>
-                          </Pressable>
-                          <Pressable
-                            style={styles.reportAnywayBtn}
-                            onPress={moveToPhotoStep}
-                          >
-                            <Text style={styles.reportAnywayBtnText}>
-                              Report Anyway →
-                            </Text>
-                          </Pressable>
-                        </View>
-                      </Animated.View>
-                    )}
+                  {/* If user confirms "Yes, same issue" */}
+                  {draft.duplicateChoice === "same_issue" && (
+                    <Animated.View
+                      entering={FadeIn}
+                      style={styles.duplicateConfirmedBox}
+                    >
+                      <Text style={styles.duplicateConfirmedTitle}>
+                        This issue is already reported
+                      </Text>
+                      <Text style={styles.duplicateConfirmedText}>
+                        Submitting another report could create a duplicate. You
+                        can upvote or track the existing report, or report
+                        anyway.
+                      </Text>
+                      <View style={styles.duplicateActionsRow}>
+                        <Pressable
+                          style={styles.viewExistingBtn}
+                          onPress={() => router.push("/(tabs)/my-reports")}
+                        >
+                          <Text style={styles.viewExistingBtnText}>
+                            View Existing Report
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          style={styles.reportAnywayBtn}
+                          onPress={moveToPhotoStep}
+                        >
+                          <Text style={styles.reportAnywayBtnText}>
+                            Report Anyway →
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </Animated.View>
+                  )}
+                </View>
+              ) : (
+                /* Scenario B: No Duplicate Found */
+                <View style={styles.noDuplicateBox}>
+                  <View style={styles.noDuplicateIconCircle}>
+                    <Text style={styles.noDuplicateIcon}>✓</Text>
                   </View>
-                ) : (
-                  /* Scenario B: No Duplicate Found */
-                  <View style={styles.noDuplicateBox}>
-                    <View style={styles.noDuplicateIconCircle}>
-                      <Text style={styles.noDuplicateIcon}>✓</Text>
-                    </View>
-                    <Text style={styles.noDuplicateTitle}>
-                      No similar reports found nearby
-                    </Text>
-                    <Text style={styles.noDuplicateSub}>
-                      Looks like this hasn't been reported yet. You can continue
-                      to upload photos.
-                    </Text>
-                  </View>
-                )}
-              </View>
-            );
-          })()}
-
-        {/* ======================================================== */}
-        {/* STEP 3: REPORT IMAGES */}
-        {/* ======================================================== */}
-        {step === 3 && (
-          <View style={styles.stepContainer}>
-            {/* Limit Banner */}
-            <View style={styles.photoCountRow}>
-              <Text style={styles.photoCountLabel}>
-                {draft.photos.length} / {MAX_PHOTOS} photos added
-              </Text>
-              {draft.photos.length >= MAX_PHOTOS && (
-                <View style={styles.limitReachedBadge}>
-                  <Text style={styles.limitReachedText}>
-                    Maximum 2 photos reached
+                  <Text style={styles.noDuplicateTitle}>
+                    No similar reports found nearby
+                  </Text>
+                  <Text style={styles.noDuplicateSub}>
+                    Looks like this hasn't been reported yet. You can continue
+                    to upload photos.
                   </Text>
                 </View>
               )}
             </View>
+          );
+        })()}
 
-            {/* Upload Action Cards (Take Photo & Gallery) */}
-            <View style={styles.actionCardsRow}>
-              {/* Take Photo Card */}
-              <Pressable
-                style={[
-                  styles.uploadActionCard,
-                  draft.photos.length >= MAX_PHOTOS &&
-                    styles.uploadActionCardDisabled,
-                ]}
-                onPress={handleOpenLiveCamera}
-                disabled={draft.photos.length >= MAX_PHOTOS}
-              >
-                <View style={styles.uploadIconCircle}>
-                  <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                    <Path
-                      d="M23 19C23 19.5304 22.7893 20.0391 22.4142 20.4142C22.0391 20.7893 21.5304 21 21 21H3C2.46957 21 1.96086 20.7893 1.58579 20.4142C1.21071 20.0391 1 19.5304 1 19V8C1 7.46957 1.21071 6.96086 1.58579 6.58579C1.96086 6.21071 2.46957 6 3 6H7L9 3H15L17 6H21C21.5304 6 22.0391 6.21071 22.4142 6.58579C22.7893 6.96086 23 7.46957 23 8V19Z"
-                      stroke="#2E7D4F"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <Circle
-                      cx="12"
-                      cy="13.5"
-                      r="3.5"
-                      stroke="#2E7D4F"
-                      strokeWidth="2"
-                    />
-                  </Svg>
-                </View>
-                <Text style={styles.uploadCardTitle}>Take Photo</Text>
-                <Text style={styles.uploadCardSub}>
-                  Capture the issue directly
+      {/* ======================================================== */}
+      {/* STEP 3: REPORT IMAGES */}
+      {/* ======================================================== */}
+      {step === 3 && (
+        <View style={styles.stepContainer}>
+          {/* Limit Banner */}
+          <View style={styles.photoCountRow}>
+            <Text style={styles.photoCountLabel}>
+              {draft.photos.length} / {MAX_PHOTOS} photos added
+            </Text>
+            {draft.photos.length >= MAX_PHOTOS && (
+              <View style={styles.limitReachedBadge}>
+                <Text style={styles.limitReachedText}>
+                  Maximum 2 photos reached
                 </Text>
-              </Pressable>
-
-              {/* Gallery Card */}
-              <Pressable
-                style={[
-                  styles.uploadActionCard,
-                  draft.photos.length >= MAX_PHOTOS &&
-                    styles.uploadActionCardDisabled,
-                ]}
-                onPress={handleGalleryPick}
-                disabled={draft.photos.length >= MAX_PHOTOS}
-              >
-                <View
-                  style={[styles.uploadIconCircle, styles.uploadIconGallery]}
-                >
-                  <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
-                    <Rect
-                      x="3"
-                      y="3"
-                      width="18"
-                      height="18"
-                      rx="3"
-                      stroke="#2E7D4F"
-                      strokeWidth="2"
-                    />
-                    <Circle cx="8.5" cy="8.5" r="1.5" fill="#2E7D4F" />
-                    <Path
-                      d="M21 15L16 10L5 21"
-                      stroke="#2E7D4F"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </Svg>
-                </View>
-                <Text style={styles.uploadCardTitle}>Choose from Gallery</Text>
-                <Text style={styles.uploadCardSub}>
-                  Select an existing photo
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* Photo Previews */}
-            {draft.photos.length > 0 && (
-              <View style={styles.previewGrid}>
-                {draft.photos.map((uri, index) => (
-                  <View
-                    key={`${uri}-${index}`}
-                    style={styles.previewThumbContainer}
-                  >
-                    <Image source={{ uri }} style={styles.previewThumbImg} />
-                    <View style={styles.photoIndexBadge}>
-                      <Text style={styles.photoIndexText}>
-                        {index === 0 ? "Original" : "Support"}
-                      </Text>
-                    </View>
-                    <Pressable
-                      style={styles.removePhotoBtn}
-                      onPress={() => handleRemovePhoto(index)}
-                    >
-                      <Text style={styles.removePhotoText}>✕</Text>
-                    </Pressable>
-                  </View>
-                ))}
               </View>
             )}
-
-            {/* AI-Powered Info Card */}
-            <View style={styles.aiInfoCard}>
-              <View style={styles.aiInfoIcon}>
-                <Text style={{ fontSize: 20 }}>✨</Text>
-              </View>
-              <View style={styles.aiInfoBody}>
-                <Text style={styles.aiInfoTitle}>AI-powered reporting</Text>
-                <Text style={styles.aiInfoText}>
-                  AI will analyze your photos to identify the waste type,
-                  severity, and other report details.
-                </Text>
-              </View>
-            </View>
           </View>
-        )}
 
-        {/* ======================================================== */}
-        {/* STEP 4: REVIEW & SUBMIT */}
-        {/* ======================================================== */}
-        {step === 4 && (
-          <View style={styles.stepContainer}>
-            {/* Photos Preview Banner */}
-            <View style={styles.reviewPhotosRow}>
-              {draft.photos.map((uri, idx) => (
-                <View key={`${uri}-${idx}`} style={styles.reviewPhotoWrap}>
-                  <Image source={{ uri }} style={styles.reviewPhotoImg} />
-                  <View style={styles.reviewPhotoBadge}>
-                    <Text style={styles.reviewPhotoBadgeText}>
-                      {idx === 0 ? "Original" : "Support"}
+          {/* Upload Action Cards (Take Photo & Gallery) */}
+          <View style={styles.actionCardsRow}>
+            {/* Take Photo Card */}
+            <Pressable
+              style={[
+                styles.uploadActionCard,
+                draft.photos.length >= MAX_PHOTOS &&
+                  styles.uploadActionCardDisabled,
+              ]}
+              onPress={handleOpenLiveCamera}
+              disabled={draft.photos.length >= MAX_PHOTOS}
+            >
+              <View style={styles.uploadIconCircle}>
+                <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M23 19C23 19.5304 22.7893 20.0391 22.4142 20.4142C22.0391 20.7893 21.5304 21 21 21H3C2.46957 21 1.96086 20.7893 1.58579 20.4142C1.21071 20.0391 1 19.5304 1 19V8C1 7.46957 1.21071 6.96086 1.58579 6.58579C1.96086 6.21071 2.46957 6 3 6H7L9 3H15L17 6H21C21.5304 6 22.0391 6.21071 22.4142 6.58579C22.7893 6.96086 23 7.46957 23 8V19Z"
+                    stroke="#2E7D4F"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <Circle
+                    cx="12"
+                    cy="13.5"
+                    r="3.5"
+                    stroke="#2E7D4F"
+                    strokeWidth="2"
+                  />
+                </Svg>
+              </View>
+              <Text style={styles.uploadCardTitle}>Take Photo</Text>
+              <Text style={styles.uploadCardSub}>
+                Capture the issue directly
+              </Text>
+            </Pressable>
+
+            {/* Gallery Card */}
+            <Pressable
+              style={[
+                styles.uploadActionCard,
+                draft.photos.length >= MAX_PHOTOS &&
+                  styles.uploadActionCardDisabled,
+              ]}
+              onPress={handleGalleryPick}
+              disabled={draft.photos.length >= MAX_PHOTOS}
+            >
+              <View style={[styles.uploadIconCircle, styles.uploadIconGallery]}>
+                <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                  <Rect
+                    x="3"
+                    y="3"
+                    width="18"
+                    height="18"
+                    rx="3"
+                    stroke="#2E7D4F"
+                    strokeWidth="2"
+                  />
+                  <Circle cx="8.5" cy="8.5" r="1.5" fill="#2E7D4F" />
+                  <Path
+                    d="M21 15L16 10L5 21"
+                    stroke="#2E7D4F"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              </View>
+              <Text style={styles.uploadCardTitle}>Choose from Gallery</Text>
+              <Text style={styles.uploadCardSub}>Select an existing photo</Text>
+            </Pressable>
+          </View>
+
+          {/* Photo Previews */}
+          {draft.photos.length > 0 && (
+            <View style={styles.previewGrid}>
+              {draft.photos.map((uri, index) => (
+                <View
+                  key={`${uri}-${index}`}
+                  style={styles.previewThumbContainer}
+                >
+                  <Image source={{ uri }} style={styles.previewThumbImg} />
+                  <View style={styles.photoIndexBadge}>
+                    <Text style={styles.photoIndexText}>
+                      {index === 0 ? "Original" : "Support"}
                     </Text>
                   </View>
+                  <Pressable
+                    style={styles.removePhotoBtn}
+                    onPress={() => handleRemovePhoto(index)}
+                  >
+                    <Text style={styles.removePhotoText}>✕</Text>
+                  </Pressable>
                 </View>
               ))}
             </View>
+          )}
 
-            {/* AI-Assessed Details Card */}
-            <View style={styles.reviewCard}>
-              <View style={styles.reviewCardHeader}>
-                <Text style={styles.reviewSectionTitle}>Report Assessment</Text>
-                <Pressable
-                  style={styles.editCardBtn}
-                  onPress={() => setIsEditModalOpen(true)}
-                >
-                  <Text style={styles.editCardBtnText}>✏️ Edit</Text>
-                </Pressable>
-              </View>
+          {/* AI-Powered Info Card */}
+          <View style={styles.aiInfoCard}>
+            <View style={styles.aiInfoIcon}>
+              <Text style={{ fontSize: 20 }}>✨</Text>
+            </View>
+            <View style={styles.aiInfoBody}>
+              <Text style={styles.aiInfoTitle}>AI-powered reporting</Text>
+              <Text style={styles.aiInfoText}>
+                AI will analyze your photos to identify the waste type,
+                severity, and other report details.
+              </Text>
+            </View>
+          </View>
+        </View>
+      )}
 
-              {/* Location item */}
-              <View style={styles.reviewItem}>
-                <Text style={styles.reviewItemLabel}>Location</Text>
-                <Text style={styles.reviewItemVal}>
-                  {draft.formattedAddress || draft.location}
-                </Text>
-                <View style={styles.gpsVerifiedRow}>
-                  <Text style={styles.gpsVerifiedText}>
-                    ✓ GPS Verified (±{draft.accuracyMeters ?? 10}m)
+      {/* ======================================================== */}
+      {/* STEP 4: REVIEW & SUBMIT */}
+      {/* ======================================================== */}
+      {step === 4 && (
+        <View style={styles.stepContainer}>
+          {/* Photos Preview Banner */}
+          <View style={styles.reviewPhotosRow}>
+            {draft.photos.map((uri, idx) => (
+              <View key={`${uri}-${idx}`} style={styles.reviewPhotoWrap}>
+                <Image source={{ uri }} style={styles.reviewPhotoImg} />
+                <View style={styles.reviewPhotoBadge}>
+                  <Text style={styles.reviewPhotoBadgeText}>
+                    {idx === 0 ? "Original" : "Support"}
                   </Text>
                 </View>
               </View>
+            ))}
+          </View>
 
-              <View style={styles.reviewDivider} />
+          {/* AI-Assessed Details Card */}
+          <View style={styles.reviewCard}>
+            <View style={styles.reviewCardHeader}>
+              <Text style={styles.reviewSectionTitle}>Report Assessment</Text>
+              <Pressable
+                style={styles.editCardBtn}
+                onPress={() => setIsEditModalOpen(true)}
+              >
+                <Text style={styles.editCardBtnText}>✏️ Edit</Text>
+              </Pressable>
+            </View>
 
-              {/* Waste Issue */}
-              <View style={styles.reviewItem}>
-                <View style={styles.reviewLabelRow}>
-                  <Text style={styles.reviewItemLabel}>Waste Issue</Text>
-                  <AiBadge label="AI Assessed" variant="green" size="sm" />
-                </View>
-                <Text style={styles.reviewItemHighlight}>
-                  {draft.wasteType}
+            {/* Location item */}
+            <View style={styles.reviewItem}>
+              <Text style={styles.reviewItemLabel}>Location</Text>
+              <Text style={styles.reviewItemVal}>
+                {draft.formattedAddress || draft.location}
+              </Text>
+              <View style={styles.gpsVerifiedRow}>
+                <Text style={styles.gpsVerifiedText}>
+                  ✓ GPS Verified (±{draft.accuracyMeters ?? 10}m)
                 </Text>
               </View>
+            </View>
 
-              <View style={styles.reviewDivider} />
+            <View style={styles.reviewDivider} />
 
-              {/* Severity */}
-              <View style={styles.reviewItem}>
-                <View style={styles.reviewLabelRow}>
-                  <Text style={styles.reviewItemLabel}>Severity Level</Text>
-                  <AiBadge label="AI Assessed" variant="green" size="sm" />
-                </View>
+            {/* Waste Issue */}
+            <View style={styles.reviewItem}>
+              <View style={styles.reviewLabelRow}>
+                <Text style={styles.reviewItemLabel}>Waste Issue</Text>
+                <AiBadge label="AI Assessed" variant="green" size="sm" />
+              </View>
+              <Text style={styles.reviewItemHighlight}>{draft.wasteType}</Text>
+            </View>
+
+            <View style={styles.reviewDivider} />
+
+            {/* Severity */}
+            <View style={styles.reviewItem}>
+              <View style={styles.reviewLabelRow}>
+                <Text style={styles.reviewItemLabel}>Severity Level</Text>
+                <AiBadge label="AI Assessed" variant="green" size="sm" />
+              </View>
+              <Text
+                style={[
+                  styles.reviewItemHighlight,
+                  draft.severity === "High" && { color: "#D64545" },
+                ]}
+              >
+                {draft.severity === "High"
+                  ? "🔴 High (Major issue)"
+                  : draft.severity === "Medium"
+                    ? "🟡 Medium (Noticeable issue)"
+                    : "🟢 Low (Minor issue)"}
+              </Text>
+            </View>
+
+            <View style={styles.reviewDivider} />
+
+            {/* Description */}
+            <View style={styles.reviewItem}>
+              <View style={styles.reviewLabelRow}>
+                <Text style={styles.reviewItemLabel}>Description</Text>
+                <AiBadge label="AI Assessed" variant="blue" size="sm" />
+              </View>
+              <Text style={styles.reviewDescText}>"{draft.description}"</Text>
+            </View>
+          </View>
+
+          {/* Recurring Issue Question */}
+          <View style={styles.recurringCard}>
+            <Text style={styles.recurringTitle}>Is this issue recurring?</Text>
+            <Text style={styles.recurringSub}>
+              Has this been an issue for a while?
+            </Text>
+            <View style={styles.recurringPillsRow}>
+              <Pressable
+                style={[
+                  styles.recurringPill,
+                  draft.isRecurring && styles.recurringPillActive,
+                ]}
+                onPress={() => updateDraft({ isRecurring: true })}
+              >
                 <Text
                   style={[
-                    styles.reviewItemHighlight,
-                    draft.severity === "High" && { color: "#D64545" },
+                    styles.recurringPillText,
+                    draft.isRecurring && styles.recurringPillTextActive,
                   ]}
                 >
-                  {draft.severity === "High"
-                    ? "🔴 High (Major issue)"
-                    : draft.severity === "Medium"
-                      ? "🟡 Medium (Noticeable issue)"
-                      : "🟢 Low (Minor issue)"}
+                  🌱 Yes, often
                 </Text>
-              </View>
-
-              <View style={styles.reviewDivider} />
-
-              {/* Description */}
-              <View style={styles.reviewItem}>
-                <View style={styles.reviewLabelRow}>
-                  <Text style={styles.reviewItemLabel}>Description</Text>
-                  <AiBadge label="AI Assessed" variant="blue" size="sm" />
-                </View>
-                <Text style={styles.reviewDescText}>"{draft.description}"</Text>
-              </View>
-            </View>
-
-            {/* Recurring Issue Question */}
-            <View style={styles.recurringCard}>
-              <Text style={styles.recurringTitle}>
-                Is this issue recurring?
-              </Text>
-              <Text style={styles.recurringSub}>
-                Has this been an issue for a while?
-              </Text>
-              <View style={styles.recurringPillsRow}>
-                <Pressable
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.recurringPill,
+                  !draft.isRecurring && styles.recurringPillActive,
+                ]}
+                onPress={() => updateDraft({ isRecurring: false })}
+              >
+                <Text
                   style={[
-                    styles.recurringPill,
-                    draft.isRecurring && styles.recurringPillActive,
+                    styles.recurringPillText,
+                    !draft.isRecurring && styles.recurringPillTextActive,
                   ]}
-                  onPress={() => updateDraft({ isRecurring: true })}
                 >
-                  <Text
-                    style={[
-                      styles.recurringPillText,
-                      draft.isRecurring && styles.recurringPillTextActive,
-                    ]}
-                  >
-                    🌱 Yes, often
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={[
-                    styles.recurringPill,
-                    !draft.isRecurring && styles.recurringPillActive,
-                  ]}
-                  onPress={() => updateDraft({ isRecurring: false })}
-                >
-                  <Text
-                    style={[
-                      styles.recurringPillText,
-                      !draft.isRecurring && styles.recurringPillTextActive,
-                    ]}
-                  >
-                    No, first time
-                  </Text>
-                </Pressable>
-              </View>
+                  No, first time
+                </Text>
+              </Pressable>
             </View>
-
-            {/* Edit Field Modal */}
-            <EditFieldModal
-              visible={isEditModalOpen}
-              onClose={() => setIsEditModalOpen(false)}
-              wasteType={draft.wasteType}
-              severity={draft.severity}
-              description={draft.description}
-              onSave={(updates) => updateDraft(updates)}
-            />
           </View>
-        )}
+
+          {/* Edit Field Modal */}
+          <EditFieldModal
+            visible={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            wasteType={draft.wasteType}
+            severity={draft.severity}
+            description={draft.description}
+            onSave={(updates) => updateDraft(updates)}
+          />
+        </View>
+      )}
     </ContentWithBottomBar>
   );
 }

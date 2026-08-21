@@ -10,4 +10,7 @@ export const env = {
   s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
   s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
   cloudfrontDomain: process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN ?? "",
+  mapStyleUrl: process.env.NEXT_PUBLIC_MAP_STYLE_URL ?? "",
+  mapDefaultLat: Number(process.env.NEXT_PUBLIC_MAP_DEFAULT_LAT ?? "20.2961"),
+  mapDefaultLng: Number(process.env.NEXT_PUBLIC_MAP_DEFAULT_LNG ?? "85.8245"),
 };

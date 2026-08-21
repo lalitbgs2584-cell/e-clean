@@ -30,6 +30,7 @@ enum ReportStatus {
   RESOLVED // authority marked resolved
   VERIFIED // citizen confirmed it's actually clean
   DISPUTED // citizen says it's not actually clean
+  CLOSED_NO_WASTE
   CANCELLED
 }
 
@@ -92,6 +93,7 @@ enum ReportImageType {
   REPORT // citizen's original submission
   BEFORE_CLEANUP // worker's before photo
   AFTER_CLEANUP // worker's after photo
+  NO_WASTE_PROOF
   COLLECTION_PROOF // recycling partner's proof of pickup
 }
 
@@ -101,7 +103,15 @@ enum CleanupStatus {
   REJECTED
   IN_PROGRESS
   COMPLETED
+  NO_WASTE_FOUND
   CANCELLED
+}
+
+enum LittererGender {
+  MALE
+  FEMALE
+  OTHER
+  UNKNOWN
 }
 
 enum VerificationResult {
@@ -128,6 +138,9 @@ enum NotificationType {
   REPORT_RESOLVED
   REPORT_VERIFIED
   REPORT_DISPUTED
+  ACCOUNT_BLOCKED
+  ACCOUNT_UNBLOCKED
+  REPORT_NO_WASTE_FOUND
 }
 
 // -------------------------
@@ -148,6 +161,12 @@ model User {
   role     Role    @default(CITIZEN)
   isActive Boolean @default(true) // authority can deactivate a worker/staff account
   points   Int     @default(0)    // lifetime points for citizen reports
+  workerLatitude  Float?
+  workerLongitude Float?
+  workerLastSeenAt DateTime?
+  wrongReportsCount Int @default(0)
+  blockedAt DateTime?
+  blockedReason String?
 
   // ---- jurisdiction ----
   // Only meaningful for WORKER / AUTHORITY. Used to route/filter reports by
@@ -187,9 +206,12 @@ model User {
   upvotes          ReportUpvote[]
   assignedCleanups Cleanup[]            @relation("AuthorityAssignments")
   cleanupsDone     Cleanup[]            @relation("WorkerCleanups")
+  pointTransactions PointTransaction[]
+  weeklyAwards WeeklyAward[]
 
   @@index([role])
   @@index([zone])
+  @@index([workerLatitude, workerLongitude])
   @@index([recyclingPartnerId])
   @@map("user")
 }
@@ -256,6 +278,9 @@ model Report {
   description      String?
   isRecurring      Boolean @default(false)
   isLittererReport Boolean @default(false)
+  littererGender LittererGender?
+  littererApproxAge String?
+  littererClothingDescription String?
 
   // ---- location ----
   // latitude/longitude are plain columns so Prisma can read/write them
@@ -319,6 +344,7 @@ model Report {
   cleanup       Cleanup?
   verification  ReportVerification?
   notifications Notification[]
+  pointTransactions PointTransaction[]
 
   @@index([userId])
   @@index([status])
@@ -330,6 +356,39 @@ model Report {
   @@index([recyclingPartnerId])
   @@index([createdAt])
   @@map("reports")
+}
+
+model PointTransaction {
+  id String @id @default(cuid())
+  userId String
+  points Int
+  reason String
+  reportId String?
+  imageId String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report Report? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, imageId])
+  @@index([userId, createdAt])
+  @@map("point_transactions")
+}
+
+model WeeklyAward {
+  id String @id @default(cuid())
+  userId String
+  weekStart DateTime
+  weekEnd DateTime
+  points Int
+  awardType String @default("PERSON_OF_THE_WEEK")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([weekStart, awardType])
+  @@index([userId])
+  @@map("weekly_awards")
 }
 
 // -------------------------
@@ -371,6 +430,7 @@ model ReportImage {
 
   cleanupBeforeOf Cleanup? @relation("BeforeImage")
   cleanupAfterOf  Cleanup? @relation("AfterImage")
+  cleanupNoWasteOf Cleanup? @relation("NoWasteImage")
 
   @@index([reportId])
   @@index([uploadedBy])
@@ -417,6 +477,7 @@ model Cleanup {
 
   beforeImageId String? @unique
   afterImageId  String? @unique
+  noWasteImageId String? @unique
 
   assignedAt      DateTime  @default(now())
   acceptedAt      DateTime?
@@ -425,6 +486,8 @@ model Cleanup {
   startedAt       DateTime?
   completedAt     DateTime?
   completionNotes String?
+  noWasteFoundAt DateTime?
+  noWasteFoundNotes String?
 
   report        Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
   worker        User   @relation("WorkerCleanups", fields: [workerId], references: [id])
@@ -432,6 +495,7 @@ model Cleanup {
 
   beforeImage ReportImage? @relation("BeforeImage", fields: [beforeImageId], references: [id])
   afterImage  ReportImage? @relation("AfterImage", fields: [afterImageId], references: [id])
+  noWasteImage ReportImage? @relation("NoWasteImage", fields: [noWasteImageId], references: [id])
 
   @@index([workerId])
   @@index([assignedBy])
@@ -469,7 +533,7 @@ model Notification {
   id String @id @default(uuid())
 
   userId   String // always the citizen who filed the report
-  reportId String
+  reportId String?
 
   type    NotificationType
   title   String
@@ -479,7 +543,7 @@ model Notification {
   createdAt DateTime @default(now())
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  report Report? @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
   @@index([reportId])

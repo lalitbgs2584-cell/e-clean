@@ -5,6 +5,7 @@ import { reportRouter } from "./report.routes";
 import { uploadRouter } from "./upload.routes";
 import { aiReportRouter } from "./ai-report.routes";
 import { workerRouter } from "./worker.routes";
+import { notificationRouter } from "./notification.routes";
 
 const apiRouter = Router();
 
@@ -16,5 +17,6 @@ apiRouter.use("/reports", reportRouter);
 apiRouter.use("/upload", uploadRouter);
 apiRouter.use("/ai-reports", aiReportRouter);
 apiRouter.use("/worker", workerRouter);
+apiRouter.use("/notifications", notificationRouter);
 
 export { apiRouter };

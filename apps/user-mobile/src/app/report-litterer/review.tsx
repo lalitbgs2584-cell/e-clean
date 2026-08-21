@@ -1,21 +1,107 @@
-import React from 'react';
-import { ScrollView, View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useLittererStore } from '@/store/litterer-store';
-import { ContentWithBottomBar } from '@/components/layout/ContentWithBottomBar';
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { useRouter } from "expo-router";
+import { useSession } from "@/lib/auth-client";
+import { config } from "@/config/env";
+import { uploadReportPhoto } from "@/lib/upload";
+import { generateUUID } from "@/lib/utilities";
+import { useLittererStore } from "@/store/litterer-store";
+import { useAppModal } from "@/hooks/useAppModal";
+import { ContentWithBottomBar } from "@/components/layout/ContentWithBottomBar";
+
+const genderMap = {
+  Male: "MALE",
+  Female: "FEMALE",
+  Others: "OTHER",
+  "Prefer not to say": "UNKNOWN",
+} as const;
 
 export default function ReviewScreen() {
   const router = useRouter();
-  const { draft, createReport, clearDraft } = useLittererStore();
+  const { data: session } = useSession();
+  const { draft, clearDraft } = useLittererStore();
+  const { showModal } = useAppModal();
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = () => {
-    const newReport = createReport(draft);
-    clearDraft();
-    router.replace({ pathname: '/report-litterer/submitted', params: { id: newReport.id } });
-  };
-
-  const handleEdit = () => {
-    router.back();
+  const handleSubmit = async () => {
+    if (
+      !draft.photos?.length ||
+      draft.latitude == null ||
+      draft.longitude == null
+    ) {
+      showModal({
+        variant: "info",
+        title: "Evidence and location required",
+        message:
+          "Capture a photo with location access enabled before submitting.",
+      });
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const reportId = generateUUID();
+      const token = session?.session?.token;
+      const originalImageKey = await uploadReportPhoto({
+        reportId,
+        slot: "original",
+        fileUri: draft.photos[0],
+        token,
+      });
+      const supportImageKey = draft.photos[1]
+        ? await uploadReportPhoto({
+            reportId,
+            slot: "support",
+            fileUri: draft.photos[1],
+            token,
+          })
+        : null;
+      const result = await fetch(`${config.apiUrl}/api/ai-reports`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          reportId,
+          originalImageKey,
+          supportImageKey,
+          location: draft.location,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
+          duplicateResolution: "new_issue",
+          isLittererReport: true,
+          littererDetails: {
+            gender: genderMap[draft.gender ?? "Prefer not to say"],
+            approxAge: draft.approxAge,
+            clothingDescription: draft.clothing,
+          },
+        }),
+      });
+      const data = await result.json().catch(() => null);
+      if (!result.ok || !data?.success)
+        throw new Error(data?.error ?? "Could not submit the report.");
+      clearDraft();
+      router.replace({
+        pathname: "/report-litterer/submitted",
+        params: { id: data.reportId },
+      });
+    } catch (error) {
+      showModal({
+        variant: "error",
+        title: "Submission failed",
+        message: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -24,43 +110,45 @@ export default function ReviewScreen() {
       header={
         <>
           <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
-          <View style={styles.headerRow}>
-            <Pressable onPress={handleEdit} style={styles.backBtn}>
-              <Text style={styles.backText}>←</Text>
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()}>
+              <Text style={styles.back}>←</Text>
             </Pressable>
-            <Text style={styles.headerTitle}>Review Report</Text>
-            <View style={styles.headerPlaceholder} />
+            <Text style={styles.headerTitle}>Review report</Text>
+            <View style={styles.back} />
           </View>
         </>
       }
       body={
-        <ScrollView style={styles.flex} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionTitle}>Report Type</Text>
-          <Text style={styles.value}>{draft.type ?? '—'}</Text>
-
-          <Text style={styles.sectionTitle}>Location</Text>
-          <Text style={styles.value}>{draft.location ?? '—'}</Text>
-
-          <Text style={styles.sectionTitle}>Date & Time</Text>
-          <Text style={styles.value}>{draft.date ?? '—'} at {draft.approxTime ?? '—'}</Text>
-
-          <Text style={styles.sectionTitle}>Description</Text>
-          <Text style={styles.value}>{draft.description ?? '—'}</Text>
-
-          <Text style={styles.sectionTitle}>Gender</Text>
-          <Text style={styles.value}>{draft.gender ?? '—'}</Text>
-
-          <Text style={styles.sectionTitle}>Approx. Age</Text>
-          <Text style={styles.value}>{draft.approxAge ?? '—'}</Text>
-
-          <Text style={styles.sectionTitle}>Clothing</Text>
-          <Text style={styles.value}>{draft.clothing ?? '—'}</Text>
+        <ScrollView contentContainerStyle={styles.content}>
+          <Text style={styles.label}>Report type</Text>
+          <Text style={styles.value}>{draft.type ?? "Litterer"}</Text>
+          <Text style={styles.label}>Location</Text>
+          <Text style={styles.value}>{draft.location ?? "—"}</Text>
+          <Text style={styles.label}>Evidence</Text>
+          <Text style={styles.value}>{draft.photos?.length ?? 0} photo(s)</Text>
+          <Text style={styles.label}>Description</Text>
+          <Text style={styles.value}>{draft.description || "—"}</Text>
+          <Text style={styles.label}>Litterer details</Text>
+          <Text style={styles.value}>
+            {[draft.gender, draft.approxAge, draft.clothing]
+              .filter(Boolean)
+              .join(" · ") || "Not provided"}
+          </Text>
         </ScrollView>
       }
       footer={
         <View style={styles.footer}>
-          <Pressable style={styles.submitBtn} onPress={handleSubmit}>
-            <Text style={styles.submitBtnText}>Submit Report</Text>
+          <Pressable
+            style={[styles.submit, submitting && styles.disabled]}
+            disabled={submitting}
+            onPress={handleSubmit}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.submitText}>Submit report</Text>
+            )}
           </Pressable>
         </View>
       }
@@ -69,16 +157,47 @@ export default function ReviewScreen() {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#DCE3D8' },
-  backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E8F0E5', justifyContent: 'center', alignItems: 'center' },
-  backText: { fontSize: 18, fontWeight: '800', color: '#2E7D4F' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#23302A', fontFamily: 'Sora' },
-  headerPlaceholder: { width: 36 },
-  content: { padding: 24, gap: 12 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#6B7A70', fontFamily: 'Plus Jakarta Sans' },
-  value: { fontSize: 15, color: '#23302A', fontFamily: 'Plus Jakarta Sans', marginBottom: 8 },
-  footer: { padding: 20, backgroundColor: '#FAFBF8' },
-  submitBtn: { backgroundColor: '#2E7D4F', paddingVertical: 16, borderRadius: 999, alignItems: 'center', shadowColor: 'rgba(46, 90, 60, 0.25)', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.8, shadowRadius: 20, elevation: 4 },
-  submitBtnText: { color: '#FCFEFA', fontSize: 16, fontWeight: '800', fontFamily: 'Sora' },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderColor: "#DCE3D8",
+  },
+  back: { width: 28, color: "#2E7D4F", fontSize: 22, fontWeight: "800" },
+  headerTitle: {
+    color: "#23302A",
+    fontFamily: "Sora",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  content: { padding: 24, gap: 8 },
+  label: {
+    marginTop: 10,
+    color: "#6B7A70",
+    fontFamily: "Plus Jakarta Sans",
+    fontWeight: "700",
+    fontSize: 12,
+  },
+  value: {
+    color: "#23302A",
+    fontFamily: "Plus Jakarta Sans",
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  footer: { padding: 20 },
+  submit: {
+    alignItems: "center",
+    borderRadius: 999,
+    backgroundColor: "#2E7D4F",
+    paddingVertical: 16,
+  },
+  disabled: { opacity: 0.65 },
+  submitText: {
+    color: "#FFFFFF",
+    fontFamily: "Sora",
+    fontSize: 16,
+    fontWeight: "800",
+  },
 });

@@ -6,6 +6,8 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import s3Client from "../services/s3.service";
 import { profileImageUrl } from "../services/profile-images.service";
+import { createNotification } from "../services/notification.service";
+import { recordWrongReport } from "../services/notification.service";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,22 +16,62 @@ import { profileImageUrl } from "../services/profile-images.service";
 const isUuid = (v: unknown): v is string =>
   typeof v === "string" &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    v
+    v,
   );
 
 /** Derive a stable S3 key for worker cleanup evidence. */
-const workerImageKey = (
-  cleanupId: string,
-  slot: "before" | "after"
-): string => `cleanups/${cleanupId}/${slot}.jpg`;
+const workerImageKey = (cleanupId: string, slot: "before" | "after"): string =>
+  `cleanups/${cleanupId}/${slot}.jpg`;
+
+const noWasteImageKey = (cleanupId: string) =>
+  `cleanups/${cleanupId}/no-waste.jpg`;
+
+// PATCH /api/worker/location — only the authenticated worker can publish GPS.
+export const updateWorkerLocation = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  const { latitude, longitude } = req.body as {
+    latitude?: unknown;
+    longitude?: unknown;
+  };
+  if (
+    typeof latitude !== "number" ||
+    typeof longitude !== "number" ||
+    latitude < -90 ||
+    latitude > 90 ||
+    longitude < -180 ||
+    longitude > 180
+  ) {
+    return res
+      .status(400)
+      .json({
+        success: false,
+        error: "Valid latitude and longitude are required",
+      });
+  }
+  try {
+    await prisma.user.update({
+      where: { id: req.user!.id },
+      data: {
+        workerLatitude: latitude,
+        workerLongitude: longitude,
+        workerLastSeenAt: new Date(),
+      },
+    });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("[worker/location]", error);
+    return res
+      .status(500)
+      .json({ success: false, error: "Could not update worker location" });
+  }
+};
 
 // ---------------------------------------------------------------------------
 // GET /api/worker/me
 // ---------------------------------------------------------------------------
-export const getWorkerMe = async (
-  req: AuthenticatedRequest,
-  res: Response
-) => {
+export const getWorkerMe = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user!.id },
@@ -74,35 +116,41 @@ export const getWorkerMe = async (
 // ---------------------------------------------------------------------------
 export const getWorkerStats = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const workerId = req.user!.id;
 
-    const [assigned, inProgress, completed, cancelled, verifiedCount, disputedCount] =
-      await Promise.all([
-        prisma.cleanup.count({ where: { workerId, status: "ASSIGNED" } }),
-        prisma.cleanup.count({ where: { workerId, status: "IN_PROGRESS" } }),
-        prisma.cleanup.count({ where: { workerId, status: "COMPLETED" } }),
-        prisma.cleanup.count({ where: { workerId, status: "CANCELLED" } }),
-        // Verified = cleanup's parent report has a VERIFIED verification result
-        prisma.cleanup.count({
-          where: {
-            workerId,
-            report: {
-              verification: { result: "VERIFIED" },
-            },
+    const [
+      assigned,
+      inProgress,
+      completed,
+      cancelled,
+      verifiedCount,
+      disputedCount,
+    ] = await Promise.all([
+      prisma.cleanup.count({ where: { workerId, status: "ASSIGNED" } }),
+      prisma.cleanup.count({ where: { workerId, status: "IN_PROGRESS" } }),
+      prisma.cleanup.count({ where: { workerId, status: "COMPLETED" } }),
+      prisma.cleanup.count({ where: { workerId, status: "CANCELLED" } }),
+      // Verified = cleanup's parent report has a VERIFIED verification result
+      prisma.cleanup.count({
+        where: {
+          workerId,
+          report: {
+            verification: { result: "VERIFIED" },
           },
-        }),
-        prisma.cleanup.count({
-          where: {
-            workerId,
-            report: {
-              verification: { result: "DISPUTED" },
-            },
+        },
+      }),
+      prisma.cleanup.count({
+        where: {
+          workerId,
+          report: {
+            verification: { result: "DISPUTED" },
           },
-        }),
-      ]);
+        },
+      }),
+    ]);
 
     return res.json({
       success: true,
@@ -127,16 +175,22 @@ export const getWorkerStats = async (
 // ---------------------------------------------------------------------------
 export const getWorkerCleanups = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const workerId = req.user!.id;
     const { status } = req.query as { status?: string };
 
-    const allowedStatuses = ["ASSIGNED", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
+    const allowedStatuses = [
+      "ASSIGNED",
+      "IN_PROGRESS",
+      "COMPLETED",
+      "CANCELLED",
+    ];
     const statusFilter =
       status && allowedStatuses.includes(status.toUpperCase())
-        ? (status.toUpperCase() as "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED")
+        ? (status.toUpperCase() as
+            "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED")
         : undefined;
 
     const cleanups = await prisma.cleanup.findMany({
@@ -175,7 +229,7 @@ export const getWorkerCleanups = async (
 // ---------------------------------------------------------------------------
 export const getWorkerHistory = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const workerId = req.user!.id;
@@ -238,7 +292,7 @@ export const getWorkerHistory = async (
 // ---------------------------------------------------------------------------
 export const getWorkerCleanupById = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const id = req.params.id as string;
@@ -282,7 +336,7 @@ export const getWorkerCleanupById = async (
 // ---------------------------------------------------------------------------
 export const acceptWorkerCleanup = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const id = req.params.id as string;
@@ -290,7 +344,9 @@ export const acceptWorkerCleanup = async (
     const cleanup = await prisma.cleanup.findFirst({ where: { id, workerId } });
 
     if (!cleanup) {
-      return res.status(404).json({ success: false, error: "Cleanup not found or not authorized" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Cleanup not found or not authorized" });
     }
     if (cleanup.status !== "ASSIGNED") {
       return res.status(409).json({
@@ -301,8 +357,16 @@ export const acceptWorkerCleanup = async (
 
     const updated = await prisma.cleanup.update({
       where: { id },
-      data: { status: "ACCEPTED", acceptedAt: new Date(), rejectedAt: null, rejectionReason: null },
-      include: { report: true, assignedByRef: { select: { id: true, name: true } } },
+      data: {
+        status: "ACCEPTED",
+        acceptedAt: new Date(),
+        rejectedAt: null,
+        rejectionReason: null,
+      },
+      include: {
+        report: true,
+        assignedByRef: { select: { id: true, name: true } },
+      },
     });
     return res.json({ success: true, data: updated });
   } catch (err) {
@@ -316,31 +380,49 @@ export const acceptWorkerCleanup = async (
 // ---------------------------------------------------------------------------
 export const rejectWorkerCleanup = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const id = req.params.id as string;
     const workerId = req.user!.id;
-    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    const reason =
+      typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
     if (!reason) {
-      return res.status(400).json({ success: false, error: "A rejection reason is required" });
+      return res
+        .status(400)
+        .json({ success: false, error: "A rejection reason is required" });
     }
 
     const cleanup = await prisma.cleanup.findFirst({ where: { id, workerId } });
     if (!cleanup) {
-      return res.status(404).json({ success: false, error: "Cleanup not found or not authorized" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Cleanup not found or not authorized" });
     }
     if (cleanup.status !== "ASSIGNED") {
-      return res.status(409).json({ success: false, error: "Only pending assignments can be rejected" });
+      return res.status(409).json({
+        success: false,
+        error: "Only pending assignments can be rejected",
+      });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
       const rejected = await tx.cleanup.update({
         where: { id },
-        data: { status: "REJECTED", rejectedAt: new Date(), rejectionReason: reason },
-        include: { report: true, assignedByRef: { select: { id: true, name: true } } },
+        data: {
+          status: "REJECTED",
+          rejectedAt: new Date(),
+          rejectionReason: reason,
+        },
+        include: {
+          report: true,
+          assignedByRef: { select: { id: true, name: true } },
+        },
       });
-      await tx.report.update({ where: { id: cleanup.reportId }, data: { status: "AI_ASSESSED" } });
+      await tx.report.update({
+        where: { id: cleanup.reportId },
+        data: { status: "AI_ASSESSED" },
+      });
       return rejected;
     });
     return res.json({ success: true, data: updated });
@@ -356,7 +438,7 @@ export const rejectWorkerCleanup = async (
 // ---------------------------------------------------------------------------
 export const startWorkerCleanup = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const id = req.params.id as string;
@@ -402,6 +484,14 @@ export const startWorkerCleanup = async (
       }),
     ]);
 
+    await createNotification({
+      userId: updated.report.userId,
+      reportId: cleanup.reportId,
+      type: "REPORT_IN_PROGRESS",
+      title: "Cleanup is in progress",
+      message: "A municipal worker has started work on your report.",
+    });
+
     return res.json({ success: true, data: updated });
   } catch (err) {
     console.error("[worker/cleanups/:id/start]", err);
@@ -415,7 +505,7 @@ export const startWorkerCleanup = async (
 // ---------------------------------------------------------------------------
 export const presignWorkerImage = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const id = req.params.id as string;
@@ -452,9 +542,10 @@ export const presignWorkerImage = async (
     }
 
     if (!["ACCEPTED", "IN_PROGRESS"].includes(cleanup.status)) {
-      return res
-        .status(409)
-        .json({ success: false, error: "Accept and start the cleanup before uploading evidence" });
+      return res.status(409).json({
+        success: false,
+        error: "Accept and start the cleanup before uploading evidence",
+      });
     }
 
     const key = workerImageKey(id, slot);
@@ -475,12 +566,143 @@ export const presignWorkerImage = async (
 };
 
 // ---------------------------------------------------------------------------
+// POST /api/worker/cleanups/:id/no-waste/presign
+// ---------------------------------------------------------------------------
+export const presignNoWasteProof = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    const id = req.params.id as string;
+    const workerId = req.user!.id;
+    if (req.body?.mime !== "image/jpeg") {
+      return res
+        .status(400)
+        .json({ success: false, error: "Only image/jpeg is supported" });
+    }
+    const cleanup = await prisma.cleanup.findFirst({ where: { id, workerId } });
+    if (!cleanup)
+      return res
+        .status(404)
+        .json({ success: false, error: "Cleanup not found or not authorized" });
+    if (!["ACCEPTED", "IN_PROGRESS"].includes(cleanup.status)) {
+      return res.status(409).json({
+        success: false,
+        error: "Accept or start the cleanup before recording no waste found",
+      });
+    }
+    const key = noWasteImageKey(id);
+    const url = await getSignedUrl(
+      s3Client,
+      new PutObjectCommand({
+        Bucket: config.s3Bucket,
+        Key: key,
+        ContentType: "image/jpeg",
+      }),
+      { expiresIn: 60 * 15 },
+    );
+    return res.json({ success: true, url, key });
+  } catch (error) {
+    console.error("[worker/cleanups/:id/no-waste/presign]", error);
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to create upload URL" });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// PATCH /api/worker/cleanups/:id/no-waste
+// ---------------------------------------------------------------------------
+export const submitNoWasteFound = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    const id = req.params.id as string;
+    const workerId = req.user!.id;
+    const { imageKey, notes } = req.body as {
+      imageKey?: string;
+      notes?: string;
+    };
+    if (imageKey !== noWasteImageKey(id)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "No-waste proof key is invalid" });
+    }
+    if (notes !== undefined && typeof notes !== "string") {
+      return res
+        .status(400)
+        .json({ success: false, error: "notes must be text" });
+    }
+    const cleanup = await prisma.cleanup.findFirst({
+      where: { id, workerId },
+      include: { report: { select: { userId: true } } },
+    });
+    if (!cleanup)
+      return res
+        .status(404)
+        .json({ success: false, error: "Cleanup not found or not authorized" });
+    if (!["ACCEPTED", "IN_PROGRESS"].includes(cleanup.status)) {
+      return res.status(409).json({
+        success: false,
+        error: "This cleanup cannot be closed as no waste found",
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const image = await tx.reportImage.create({
+        data: {
+          reportId: cleanup.reportId,
+          uploadedBy: workerId,
+          storagePath: imageKey,
+          type: "NO_WASTE_PROOF",
+          mediaType: "PHOTO",
+        },
+      });
+      const nextCleanup = await tx.cleanup.update({
+        where: { id },
+        data: {
+          status: "NO_WASTE_FOUND",
+          noWasteImageId: image.id,
+          noWasteFoundAt: new Date(),
+          noWasteFoundNotes: notes?.trim() || null,
+        },
+        include: { noWasteImage: true, report: true },
+      });
+      await tx.report.update({
+        where: { id: cleanup.reportId },
+        data: { status: "CLOSED_NO_WASTE" },
+      });
+      return nextCleanup;
+    });
+    await recordWrongReport(
+      cleanup.report.userId,
+      "Worker submitted no-waste evidence for an assigned report",
+    );
+    await createNotification({
+      userId: cleanup.report.userId,
+      reportId: cleanup.reportId,
+      type: "REPORT_NO_WASTE_FOUND",
+      title: "No waste found at the location",
+      message:
+        "A worker submitted photo evidence that no waste was present at the dispatched location.",
+    });
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error("[worker/cleanups/:id/no-waste]", error);
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to submit no-waste evidence" });
+  }
+};
+
+// ---------------------------------------------------------------------------
 // PATCH /api/worker/cleanups/:id/complete
 // body: { beforeImageKey: string, afterImageKey: string, notes?: string }
 // ---------------------------------------------------------------------------
 export const completeWorkerCleanup = async (
   req: AuthenticatedRequest,
-  res: Response
+  res: Response,
 ) => {
   try {
     const id = req.params.id as string;
@@ -511,12 +733,15 @@ export const completeWorkerCleanup = async (
       beforeImageKey !== workerImageKey(id, "before") ||
       afterImageKey !== workerImageKey(id, "after")
     ) {
-      return res.status(400).json({ success: false, error: "Cleanup evidence keys are invalid" });
+      return res
+        .status(400)
+        .json({ success: false, error: "Cleanup evidence keys are invalid" });
     }
 
     // Verify ownership and current status
     const cleanup = await prisma.cleanup.findFirst({
       where: { id, workerId },
+      include: { report: { select: { userId: true } } },
     });
 
     if (!cleanup) {
@@ -579,8 +804,17 @@ export const completeWorkerCleanup = async (
         });
 
         return [before, after, updated];
-      }
+      },
     );
+
+    await createNotification({
+      userId: updatedCleanup.report.userId,
+      reportId: cleanup.reportId,
+      type: "REPORT_CLEANUP_COMPLETED",
+      title: "Cleanup evidence submitted",
+      message:
+        "The cleanup team has submitted before and after photos for authority review.",
+    });
 
     return res.json({
       success: true,

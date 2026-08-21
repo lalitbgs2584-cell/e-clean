@@ -35,11 +35,15 @@ export async function processAIClassificationJob(
   }
 
   // Update Report record in DB
+  const report = await prisma.report.findUnique({
+    where: { id: job.reportId },
+    select: { isLittererReport: true },
+  });
   await prisma.report.update({
     where: { id: job.reportId },
     data: {
       status: "AI_ASSESSED",
-      dumpType: assessment.dumpType,
+      dumpType: report?.isLittererReport ? "ILLEGAL_DUMPING" : assessment.dumpType,
       wasteCategory: assessment.wasteCategory,
       wasteVolume: assessment.wasteVolume,
       truckSize: assessment.truckSize,

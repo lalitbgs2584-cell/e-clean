@@ -9,6 +9,8 @@ import {
   promoteReportImages,
   type ReportImageSlot,
 } from "../services/report-images.service";
+import { randomUUID } from "node:crypto";
+import { config } from "../config/env";
 
 interface GenerateReportBody {
   reportId?: string;
@@ -18,6 +20,12 @@ interface GenerateReportBody {
   latitude: number;
   longitude: number;
   duplicateResolution?: "same_issue" | "new_issue";
+  isLittererReport?: boolean;
+  littererDetails?: {
+    gender?: "MALE" | "FEMALE" | "OTHER" | "UNKNOWN";
+    approxAge?: string;
+    clothingDescription?: string;
+  };
 }
 
 interface NearbyReportRow {
@@ -79,6 +87,8 @@ export const generateAIBasedReport = async (
     latitude,
     longitude,
     duplicateResolution,
+    isLittererReport,
+    littererDetails,
   }: GenerateReportBody = req.body;
 
   if (!isUuid(reportId)) {
@@ -101,6 +111,36 @@ export const generateAIBasedReport = async (
     return res.status(400).json({
       success: false,
       error: "latitude and longitude are required",
+    });
+  }
+  if (isLittererReport !== undefined && typeof isLittererReport !== "boolean") {
+    return res
+      .status(400)
+      .json({ success: false, error: "isLittererReport must be a boolean" });
+  }
+  if (
+    littererDetails?.gender &&
+    !["MALE", "FEMALE", "OTHER", "UNKNOWN"].includes(littererDetails.gender)
+  ) {
+    return res
+      .status(400)
+      .json({ success: false, error: "Unsupported litterer gender" });
+  }
+  if (
+    littererDetails?.approxAge !== undefined &&
+    typeof littererDetails.approxAge !== "string"
+  ) {
+    return res
+      .status(400)
+      .json({ success: false, error: "litterer approxAge must be text" });
+  }
+  if (
+    littererDetails?.clothingDescription !== undefined &&
+    typeof littererDetails.clothingDescription !== "string"
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: "litterer clothingDescription must be text",
     });
   }
 
@@ -142,19 +182,49 @@ export const generateAIBasedReport = async (
         latitude,
         longitude,
         status: "PENDING",
+        isLittererReport: Boolean(isLittererReport),
+        ...(isLittererReport
+          ? {
+              dumpType: "ILLEGAL_DUMPING",
+              littererGender: littererDetails?.gender ?? "UNKNOWN",
+              littererApproxAge: littererDetails?.approxAge?.trim() || null,
+              littererClothingDescription:
+                littererDetails?.clothingDescription?.trim() || null,
+            }
+          : {}),
       },
     });
 
     try {
       const imagePaths = await promoteReportImages(reportId, imageSlots);
-      await prisma.reportImage.createMany({
-        data: imagePaths.map((storagePath) => ({
-          reportId,
-          uploadedBy: userId,
-          storagePath,
-          type: "REPORT",
-          mediaType: "PHOTO",
-        })),
+      const imageRows = imagePaths.map((storagePath) => ({
+        id: randomUUID(),
+        reportId,
+        uploadedBy: userId,
+        storagePath,
+        type: "REPORT" as const,
+        mediaType: "PHOTO" as const,
+      }));
+      await prisma.$transaction(async (tx) => {
+        await tx.reportImage.createMany({ data: imageRows });
+        const ledger = await tx.pointTransaction.createMany({
+          data: imageRows.map((image) => ({
+            userId,
+            reportId,
+            imageId: image.id,
+            points: config.reportImagePoints,
+            reason: "REPORT_IMAGE_UPLOAD",
+          })),
+          skipDuplicates: true,
+        });
+        if (ledger.count && config.reportImagePoints) {
+          await tx.user.update({
+            where: { id: userId },
+            data: {
+              points: { increment: ledger.count * config.reportImagePoints },
+            },
+          });
+        }
       });
       await enqueueAIClassification({
         reportId,

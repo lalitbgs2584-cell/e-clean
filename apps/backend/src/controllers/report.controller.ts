@@ -1,6 +1,10 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { prisma } from "db/client";
+import {
+  createNotification,
+  recordWrongReport,
+} from "../services/notification.service";
 
 export const listReports = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -73,12 +77,24 @@ export const updateCitizenReport = async (
   }
 
   const { id } = req.params;
-  const { isRecurring, wasteType, severity, description, isLitterer } = req.body as {
+  const {
+    isRecurring,
+    wasteType,
+    severity,
+    description,
+    isLitterer,
+    littererGender,
+    littererApproxAge,
+    littererClothingDescription,
+  } = req.body as {
     isRecurring?: boolean;
     wasteType?: string;
     severity?: string;
     description?: string;
     isLitterer?: boolean;
+    littererGender?: "MALE" | "FEMALE" | "OTHER" | "UNKNOWN" | null;
+    littererApproxAge?: string | null;
+    littererClothingDescription?: string | null;
   };
 
   if (isRecurring !== undefined && typeof isRecurring !== "boolean") {
@@ -106,6 +122,36 @@ export const updateCitizenReport = async (
       .status(400)
       .json({ success: false, error: "description must be text" });
   }
+  if (
+    littererGender !== undefined &&
+    littererGender !== null &&
+    !["MALE", "FEMALE", "OTHER", "UNKNOWN"].includes(littererGender)
+  ) {
+    return res
+      .status(400)
+      .json({ success: false, error: "Unsupported litterer gender" });
+  }
+  if (
+    littererApproxAge !== undefined &&
+    littererApproxAge !== null &&
+    typeof littererApproxAge !== "string"
+  ) {
+    return res
+      .status(400)
+      .json({ success: false, error: "littererApproxAge must be text" });
+  }
+  if (
+    littererClothingDescription !== undefined &&
+    littererClothingDescription !== null &&
+    typeof littererClothingDescription !== "string"
+  ) {
+    return res
+      .status(400)
+      .json({
+        success: false,
+        error: "littererClothingDescription must be text",
+      });
+  }
 
   try {
     const report = await prisma.report.update({
@@ -121,6 +167,18 @@ export const updateCitizenReport = async (
           : {}),
         ...(description !== undefined
           ? { description: description.trim() || null }
+          : {}),
+        ...(littererGender !== undefined
+          ? { littererGender: littererGender as never }
+          : {}),
+        ...(littererApproxAge !== undefined
+          ? { littererApproxAge: littererApproxAge?.trim() || null }
+          : {}),
+        ...(littererClothingDescription !== undefined
+          ? {
+              littererClothingDescription:
+                littererClothingDescription?.trim() || null,
+            }
           : {}),
       },
       include: { images: true },
@@ -155,46 +213,92 @@ export const verifyResolvedReport = async (
     comment?: string;
   };
   if (result !== "VERIFIED" && result !== "DISPUTED") {
-    return res.status(400).json({ success: false, error: "result must be VERIFIED or DISPUTED" });
+    return res
+      .status(400)
+      .json({ success: false, error: "result must be VERIFIED or DISPUTED" });
   }
   if (comment !== undefined && typeof comment !== "string") {
-    return res.status(400).json({ success: false, error: "comment must be text" });
+    return res
+      .status(400)
+      .json({ success: false, error: "comment must be text" });
   }
 
   try {
-    const report = await prisma.report.findFirst({ where: { id: id as string, userId } });
+    const report = await prisma.report.findFirst({
+      where: { id: id as string, userId },
+    });
     if (!report) {
-      return res.status(404).json({ success: false, error: "Report not found" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Report not found" });
     }
     if (report.status !== "RESOLVED") {
-      return res.status(409).json({ success: false, error: "Only authority-resolved reports can be verified" });
+      return res
+        .status(409)
+        .json({
+          success: false,
+          error: "Only authority-resolved reports can be verified",
+        });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.reportVerification.upsert({
         where: { reportId: report.id },
-        create: { reportId: report.id, userId, result, comment: comment?.trim() || null },
+        create: {
+          reportId: report.id,
+          userId,
+          result,
+          comment: comment?.trim() || null,
+        },
         update: { result, comment: comment?.trim() || null },
       });
-      
+
       if (result === "VERIFIED") {
         await tx.user.update({
           where: { id: report.userId },
-          data: { points: { increment: report.isLittererReport ? 50 : 10 } }
+          data: { points: { increment: report.isLittererReport ? 50 : 10 } },
         });
       }
 
       return tx.report.update({
         where: { id: report.id },
         data: { status: result === "VERIFIED" ? "VERIFIED" : "DISPUTED" },
-        include: { images: true, cleanup: { include: { beforeImage: true, afterImage: true } }, verification: true },
+        include: {
+          images: true,
+          cleanup: { include: { beforeImage: true, afterImage: true } },
+          verification: true,
+        },
       });
     });
+
+    if (result === "VERIFIED") {
+      await createNotification({
+        userId: report.userId,
+        reportId: report.id,
+        type: "REPORT_VERIFIED",
+        title: "Cleanup verified",
+        message: "Thank you for confirming that the area is clean.",
+      });
+    } else {
+      await recordWrongReport(
+        report.userId,
+        "Citizen disputed an authority-approved cleanup",
+      );
+      await createNotification({
+        userId: report.userId,
+        reportId: report.id,
+        type: "REPORT_DISPUTED",
+        title: "Dispute submitted",
+        message: "Your dispute has been sent to the authority for review.",
+      });
+    }
 
     return res.json({ success: true, data: updated });
   } catch (error) {
     console.error("verifyResolvedReport error:", error);
-    return res.status(500).json({ success: false, error: "Failed to save verification" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to save verification" });
   }
 };
 

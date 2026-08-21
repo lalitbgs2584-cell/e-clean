@@ -7,7 +7,7 @@ export interface ReportReviewUpdate {
   severity: "Low" | "Medium" | "High";
   description: string;
   isRecurring: boolean;
-  isLitterer: boolean;
+  isLitterer?: boolean;
 }
 
 export interface CitizenReport {
@@ -21,14 +21,48 @@ export interface CitizenReport {
   severityScore: number | null;
   attention: string;
   createdAt: string;
-  images: Array<{ id: string; storagePath: string; type: string; createdAt: string }>;
+  images: Array<{
+    id: string;
+    storagePath: string;
+    type: string;
+    createdAt: string;
+  }>;
   cleanup?: {
     id: string;
     status: string;
     beforeImage?: { storagePath: string } | null;
     afterImage?: { storagePath: string } | null;
   } | null;
-  verification?: { result: "VERIFIED" | "DISPUTED"; comment: string | null } | null;
+  verification?: {
+    result: "VERIFIED" | "DISPUTED";
+    comment: string | null;
+  } | null;
+}
+
+export interface CitizenNotification {
+  id: string;
+  type: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+  report?: { id: string; status: string; location: string | null } | null;
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  name: string;
+  image: string | null;
+  profileImageUrl: string | null;
+  points: number;
+  rank: number;
+}
+
+export interface MyRank {
+  rank: number | null;
+  totalParticipants: number;
+  points: number;
+  wrongReportsCount: number;
+  isActive: boolean;
 }
 
 async function getSessionToken() {
@@ -53,10 +87,26 @@ async function citizenRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return data.data as T;
 }
 
-export const getMyReports = () => citizenRequest<CitizenReport[]>("/api/reports");
+export const getMyReports = () =>
+  citizenRequest<CitizenReport[]>("/api/reports");
 
 export const getMyReport = (reportId: string) =>
   citizenRequest<CitizenReport>(`/api/reports/${reportId}`);
+
+export const getNotifications = () =>
+  citizenRequest<CitizenNotification[]>("/api/notifications");
+
+export const markNotificationRead = (id: string) =>
+  citizenRequest<void>(`/api/notifications/${id}/read`, { method: "PATCH" });
+
+export const markAllNotificationsRead = () =>
+  citizenRequest<void>("/api/notifications/read-all", { method: "PATCH" });
+
+export const getLeaderboard = (scope: "all" | "month" = "all") =>
+  citizenRequest<LeaderboardEntry[]>(`/api/users/leaderboard?scope=${scope}`);
+
+export const getMyRank = (scope: "all" | "month" = "all") =>
+  citizenRequest<MyRank>(`/api/users/me/rank?scope=${scope}`);
 
 export const verifyMyReport = (
   reportId: string,

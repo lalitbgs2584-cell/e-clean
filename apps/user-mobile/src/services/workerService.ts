@@ -10,7 +10,13 @@ const base = config.apiUrl;
 // Types
 // ---------------------------------------------------------------------------
 
-export type CleanupStatus = "ASSIGNED" | "ACCEPTED" | "REJECTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type CleanupStatus =
+  | "ASSIGNED"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
 
 export interface WorkerUser {
   id: string;
@@ -99,6 +105,11 @@ export interface CompleteCleanupBody {
   notes?: string;
 }
 
+export interface NoWasteFoundBody {
+  imageKey: string;
+  notes?: string;
+}
+
 import { authClient } from "@/lib/auth-client";
 import * as SecureStore from "expo-secure-store";
 
@@ -126,10 +137,7 @@ async function getAuthToken(): Promise<string | null> {
 // ---------------------------------------------------------------------------
 // Fetch helper — sends token and cookies (Better Auth session)
 // ---------------------------------------------------------------------------
-async function apiFetch<T>(
-  path: string,
-  options?: RequestInit
-): Promise<T> {
+async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const token = await getAuthToken();
 
   const res = await fetch(`${base}${path}`, {
@@ -142,7 +150,9 @@ async function apiFetch<T>(
     ...options,
   });
 
-  const json = await res.json().catch(() => ({ success: false, error: "Invalid response" }));
+  const json = await res
+    .json()
+    .catch(() => ({ success: false, error: "Invalid response" }));
 
   if (!res.ok) {
     throw new Error(json?.error ?? `Request failed: ${res.status}`);
@@ -161,53 +171,59 @@ export const getWorkerMe = () =>
 export const getWorkerStats = () =>
   apiFetch<{ success: boolean; data: WorkerStats }>("/api/worker/stats");
 
+export const updateWorkerLocation = (latitude: number, longitude: number) =>
+  apiFetch<{ success: boolean }>("/api/worker/location", {
+    method: "PATCH",
+    body: JSON.stringify({ latitude, longitude }),
+  });
+
 export const getWorkerCleanups = (status?: CleanupStatus) => {
   const qs = status ? `?status=${status}` : "";
   return apiFetch<{ success: boolean; count: number; data: WorkerCleanup[] }>(
-    `/api/worker/cleanups${qs}`
+    `/api/worker/cleanups${qs}`,
   );
 };
 
 export const getWorkerCleanup = (id: string) =>
   apiFetch<{ success: boolean; data: WorkerCleanup }>(
-    `/api/worker/cleanups/${id}`
+    `/api/worker/cleanups/${id}`,
   );
 
 export const getWorkerHistory = (
   status?: string,
-  timeFilter?: "week" | "month"
+  timeFilter?: "week" | "month",
 ) => {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   if (timeFilter) params.set("timeFilter", timeFilter);
   const qs = params.toString() ? `?${params.toString()}` : "";
   return apiFetch<{ success: boolean; count: number; data: WorkerCleanup[] }>(
-    `/api/worker/cleanups/history${qs}`
+    `/api/worker/cleanups/history${qs}`,
   );
 };
 
 export const startCleanup = (id: string) =>
   apiFetch<{ success: boolean; data: WorkerCleanup }>(
     `/api/worker/cleanups/${id}/start`,
-    { method: "PATCH" }
+    { method: "PATCH" },
   );
 
 export const acceptCleanup = (id: string) =>
   apiFetch<{ success: boolean; data: WorkerCleanup }>(
     `/api/worker/cleanups/${id}/accept`,
-    { method: "PATCH" }
+    { method: "PATCH" },
   );
 
 export const rejectCleanup = (id: string, reason: string) =>
   apiFetch<{ success: boolean; data: WorkerCleanup }>(
     `/api/worker/cleanups/${id}/reject`,
-    { method: "PATCH", body: JSON.stringify({ reason }) }
+    { method: "PATCH", body: JSON.stringify({ reason }) },
   );
 
 export const presignCleanupImage = (
   id: string,
   slot: "before" | "after",
-  mime = "image/jpeg"
+  mime = "image/jpeg",
 ) =>
   apiFetch<PresignResponse>(`/api/worker/cleanups/${id}/images/presign`, {
     method: "POST",
@@ -217,7 +233,19 @@ export const presignCleanupImage = (
 export const completeCleanup = (id: string, body: CompleteCleanupBody) =>
   apiFetch<{ success: boolean; data: { cleanup: WorkerCleanup } }>(
     `/api/worker/cleanups/${id}/complete`,
-    { method: "PATCH", body: JSON.stringify(body) }
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+
+export const presignNoWasteProof = (id: string, mime = "image/jpeg") =>
+  apiFetch<PresignResponse>(`/api/worker/cleanups/${id}/no-waste/presign`, {
+    method: "POST",
+    body: JSON.stringify({ mime }),
+  });
+
+export const submitNoWasteFound = (id: string, body: NoWasteFoundBody) =>
+  apiFetch<{ success: boolean; data: { cleanup: WorkerCleanup } }>(
+    `/api/worker/cleanups/${id}/no-waste`,
+    { method: "PATCH", body: JSON.stringify(body) },
   );
 
 // ---------------------------------------------------------------------------
@@ -225,7 +253,7 @@ export const completeCleanup = (id: string, body: CompleteCleanupBody) =>
 // ---------------------------------------------------------------------------
 export async function uploadToPresignedUrl(
   presignedUrl: string,
-  fileUri: string
+  fileUri: string,
 ): Promise<void> {
   const file = await fetch(fileUri);
   if (!file.ok) throw new Error("Could not read photo from device.");

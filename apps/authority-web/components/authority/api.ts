@@ -143,4 +143,62 @@ export const authorityApi = {
       },
     );
   },
+
+  mapReports(
+    token: string,
+    filters: {
+      status?: string;
+      attention?: string;
+      category?: string;
+      zone?: string;
+      from?: string;
+      to?: string;
+    } = {},
+  ) {
+    const params = new URLSearchParams();
+    if (filters.status && filters.status !== "ALL")
+      params.set("status", filters.status);
+    if (filters.attention && filters.attention !== "ALL")
+      params.set("attention", filters.attention);
+    if (filters.category && filters.category !== "ALL")
+      params.set("category", filters.category);
+    if (filters.zone && filters.zone !== "ALL") params.set("zone", filters.zone);
+    if (filters.from) params.set("from", filters.from);
+    if (filters.to) params.set("to", filters.to);
+    const qs = params.toString();
+    return request<{
+      type: "FeatureCollection";
+      features: any[];
+      meta: { total: number; filtered: number };
+    }>(`/api/authority/map/reports${qs ? `?${qs}` : ""}`, token);
+  },
+
+  mapSummary(token: string) {
+    return request<{
+      totalReports: number;
+      openReports: number;
+      urgentReports: number;
+      unassigned: number;
+      inProgress: number;
+      pendingVerification: number;
+      resolved: number;
+      activeWorkers: number;
+    }>("/api/authority/map/summary", token);
+  },
+
+  mapWorkers(token: string) {
+    return request<{
+      data: Array<{
+        id: string;
+        name: string;
+        profileImageUrl: string | null;
+        workerLatitude: number | null;
+        workerLongitude: number | null;
+        workerLastSeenAt: string | null;
+        available: boolean;
+        activeAssignments: number;
+        currentAssignment: { reportId: string; status: string } | null;
+      }>;
+    }>("/api/authority/map/workers", token);
+  },
 };

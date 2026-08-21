@@ -132,19 +132,45 @@ export async function PATCH(
           },
         }),
       ]);
+      await prisma.notification.create({
+        data: {
+          userId: report.userId,
+          reportId: id,
+          type: "REPORT_ASSIGNED",
+          title: "Cleanup team assigned",
+          message: "A municipal worker has been assigned to your report.",
+        },
+      });
     }
 
     if (action === "approve_cleanup") {
-      const cleanup = await prisma.cleanup.findUnique({ where: { reportId: id } });
-      if (report.status !== "CLEANUP_COMPLETED" || cleanup?.status !== "COMPLETED") {
+      const cleanup = await prisma.cleanup.findUnique({
+        where: { reportId: id },
+      });
+      if (
+        report.status !== "CLEANUP_COMPLETED" ||
+        cleanup?.status !== "COMPLETED"
+      ) {
         return NextResponse.json(
-          { error: "Worker cleanup evidence must be submitted before approval" },
+          {
+            error: "Worker cleanup evidence must be submitted before approval",
+          },
           { status: 409 },
         );
       }
       await prisma.report.update({
         where: { id },
         data: { status: "RESOLVED", resolvedAt: new Date() },
+      });
+      await prisma.notification.create({
+        data: {
+          userId: report.userId,
+          reportId: id,
+          type: "REPORT_RESOLVED",
+          title: "Cleanup approved",
+          message:
+            "The authority has approved the cleanup. Please verify the area when you can.",
+        },
       });
     }
 

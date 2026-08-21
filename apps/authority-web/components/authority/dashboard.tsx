@@ -47,6 +47,7 @@ import {
   type ReportActionType,
 } from "./shared";
 import { ReportTimeline } from "./report-timeline";
+import { MapCommandCenter } from "./map-command-center";
 
 type Page =
   | "Overview"
@@ -394,13 +395,23 @@ function ReportDrawer({
         </header>
         <div
           className={`detail-image ${report.attention === "URGENT" ? "orange" : report.status === "DISPUTED" ? "teal" : "green"}`}
-          style={{ padding: report.images.some(i => i.type === "REPORT") ? 0 : undefined, overflow: "hidden" }}
+          style={{
+            padding: report.images.some((i) => i.type === "REPORT")
+              ? 0
+              : undefined,
+            overflow: "hidden",
+          }}
         >
           {report.images.find((img) => img.type === "REPORT")?.url ? (
             <img
               src={report.images.find((img) => img.type === "REPORT")!.url!}
               alt="Citizen report image"
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+                display: "block",
+              }}
             />
           ) : (
             "Citizen report image · GPS verified"
@@ -460,7 +471,11 @@ function ReportDrawer({
             <div className="evidence-shot before">
               {report.images[0]?.url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={report.images[0].url} alt="Reported waste" loading="lazy" />
+                <img
+                  src={report.images[0].url}
+                  alt="Reported waste"
+                  loading="lazy"
+                />
               ) : null}
               <span className="evidence-label">Before</span>
               <small>
@@ -472,7 +487,11 @@ function ReportDrawer({
             <div className="evidence-shot after">
               {report.cleanup?.afterImage?.url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={report.cleanup.afterImage.url} alt="After cleanup" loading="lazy" />
+                <img
+                  src={report.cleanup.afterImage.url}
+                  alt="After cleanup"
+                  loading="lazy"
+                />
               ) : null}
               <span className="evidence-label">After</span>
               <small>
@@ -1057,15 +1076,30 @@ function AddUserModal({
           <X size={19} />
         </button>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 6,
+          }}
+        >
           <span className="modal-icon" style={{ margin: 0 }}>
-            {role === "WORKER" ? <Users size={22} /> : <ShieldCheck size={22} />}
+            {role === "WORKER" ? (
+              <Users size={22} />
+            ) : (
+              <ShieldCheck size={22} />
+            )}
           </span>
           <div>
             <h2 style={{ fontSize: 18, margin: 0 }}>
-              {role === "WORKER" ? "Provision Field Worker" : "Provision Authority Officer"}
+              {role === "WORKER"
+                ? "Provision Field Worker"
+                : "Provision Authority Officer"}
             </h2>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}>
+            <p
+              style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}
+            >
               {role === "WORKER"
                 ? "Creates credentials for mobile field worker app access."
                 : "Creates credentials for authority web command center access."}
@@ -1073,7 +1107,15 @@ function AddUserModal({
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+        <form
+          onSubmit={handleSubmit}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+            marginTop: 12,
+          }}
+        >
           {/* Role selector pill toggle */}
           <div
             style={{
@@ -1089,7 +1131,11 @@ function AddUserModal({
             <button
               type="button"
               className={`button ${role === "WORKER" ? "primary" : "ghost"}`}
-              style={{ padding: "7px 12px", fontSize: 12, justifyContent: "center" }}
+              style={{
+                padding: "7px 12px",
+                fontSize: 12,
+                justifyContent: "center",
+              }}
               onClick={() => setRole("WORKER")}
             >
               <Users size={14} style={{ marginRight: 6 }} /> Field Worker
@@ -1097,22 +1143,31 @@ function AddUserModal({
             <button
               type="button"
               className={`button ${role === "AUTHORITY" ? "primary" : "ghost"}`}
-              style={{ padding: "7px 12px", fontSize: 12, justifyContent: "center" }}
+              style={{
+                padding: "7px 12px",
+                fontSize: 12,
+                justifyContent: "center",
+              }}
               onClick={() => setRole("AUTHORITY")}
             >
-              <ShieldCheck size={14} style={{ marginRight: 6 }} /> Authority Officer
+              <ShieldCheck size={14} style={{ marginRight: 6 }} /> Authority
+              Officer
             </button>
           </div>
 
           {/* Row 1: Name & Email */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+          >
             <label className="setting-field" style={{ margin: 0 }}>
               Full Name *
               <input
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={role === "WORKER" ? "Ramesh Kumar" : "Officer Sharma"}
+                placeholder={
+                  role === "WORKER" ? "Ramesh Kumar" : "Officer Sharma"
+                }
               />
             </label>
 
@@ -1123,13 +1178,17 @@ function AddUserModal({
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={role === "WORKER" ? "worker@eclean.in" : "officer@city.gov"}
+                placeholder={
+                  role === "WORKER" ? "worker@eclean.in" : "officer@city.gov"
+                }
               />
             </label>
           </div>
 
           {/* Row 2: Password & Phone */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+          >
             <label className="setting-field" style={{ margin: 0 }}>
               Initial Password *
               <input
@@ -1184,7 +1243,12 @@ function AddUserModal({
           )}
 
           <div className="modal-actions" style={{ marginTop: 4 }}>
-            <button type="button" className="button ghost" onClick={onClose} disabled={pending}>
+            <button
+              type="button"
+              className="button ghost"
+              onClick={onClose}
+              disabled={pending}
+            >
               Cancel
             </button>
             <button type="submit" className="button primary" disabled={pending}>
@@ -1290,9 +1354,8 @@ function WorkersPanel({
         <div>
           <h2>Field workforce</h2>
           <p>
-            Availability, workload, and operational performance. Official
-            worker photos are managed here — workers cannot change their own
-            photo.
+            Availability, workload, and operational performance. Official worker
+            photos are managed here — workers cannot change their own photo.
           </p>
         </div>
         <button className="button primary" onClick={onAddUser}>
@@ -1329,7 +1392,9 @@ function WorkersPanel({
             {payload.workers.map((worker) => (
               <tr key={worker.id}>
                 <td>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div
+                    style={{ display: "flex", alignItems: "center", gap: 10 }}
+                  >
                     <WorkerAvatar worker={worker} />
                     <div>
                       <b>{worker.name}</b>
@@ -1479,8 +1544,13 @@ export default function AuthorityDashboard() {
     }
   }, [selectedReport, selectedReportId]);
 
-  if (isPending || !session || dashboardQuery.isPending) return <LoadingState />;
-  if (user?.role !== "AUTHORITY" || (dashboardQuery.error instanceof AuthorityApiError && dashboardQuery.error.status === 403)) {
+  if (isPending || !session || dashboardQuery.isPending)
+    return <LoadingState />;
+  if (
+    user?.role !== "AUTHORITY" ||
+    (dashboardQuery.error instanceof AuthorityApiError &&
+      dashboardQuery.error.status === 403)
+  ) {
     return (
       <AccessDenied
         email={user?.email ?? session.user.email}
@@ -1795,7 +1865,11 @@ export default function AuthorityDashboard() {
           ) : null}
 
           {page === "Map & Locations" ? (
-            <ZonePanel payload={payload} onOpen={openReport} />
+            <MapCommandCenter
+              payload={payload}
+              onOpen={openReport}
+              token={token}
+            />
           ) : null}
           {page === "Assignments" ? (
             <ReportTable

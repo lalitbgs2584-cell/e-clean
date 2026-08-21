@@ -10,13 +10,13 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useCitizenStore, WasteCategory } from "@/store/citizen-store";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCdnUrl } from "@/lib/cdn";
+import { useAppModal } from "@/hooks/useAppModal";
 
 const WASTE_TYPES: WasteCategory[] = [
   "Mixed Waste",
@@ -29,6 +29,7 @@ const WASTE_TYPES: WasteCategory[] = [
 
 export default function ReportDetailsScreen() {
   const router = useRouter();
+  const { showModal } = useAppModal();
   const { draftReport, createNewReport, updateDraftReport } = useCitizenStore();
   const [wasteType, setWasteType] = useState<WasteCategory>("Mixed Waste");
   const [description, setDescription] = useState("");
@@ -52,10 +53,11 @@ export default function ReportDetailsScreen() {
 
   const handleSubmit = async () => {
     if (photos.length === 0) {
-      Alert.alert(
-        "Photo required",
-        "Please capture at least one photo of the waste.",
-      );
+      showModal({
+        variant: "info",
+        title: "Photo required",
+        message: "Please capture at least one photo of the waste.",
+      });
       return;
     }
     setIsSubmitting(true);
@@ -68,10 +70,11 @@ export default function ReportDetailsScreen() {
       });
       router.push(`/report-submitted?id=${encodeURIComponent(report.id)}`);
     } catch {
-      Alert.alert(
-        "Submission Failed",
-        "Could not submit the report. Please try again.",
-      );
+      showModal({
+        variant: "error",
+        title: "Submission failed",
+        message: "Could not submit the report. Please try again.",
+      });
     } finally {
       setIsSubmitting(false);
     }

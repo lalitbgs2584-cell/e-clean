@@ -4,6 +4,8 @@ import { requireAuth } from "../middlewares/auth.middleware";
 
 const userRouter = Router();
 
+userRouter.get("/leaderboard", requireAuth, UserController.getLeaderboard);
+userRouter.get("/me/rank", requireAuth, UserController.getMyRank);
 userRouter.get("/me", requireAuth, UserController.getProfile);
 
 // Self-managed profile image (CITIZEN and AUTHORITY only; WORKER is rejected
@@ -11,12 +13,12 @@ userRouter.get("/me", requireAuth, UserController.getProfile);
 userRouter.post(
   "/me/profile-image/presign",
   requireAuth,
-  UserController.presignOwnProfileImage
+  UserController.presignOwnProfileImage,
 );
 userRouter.patch(
   "/me/profile-image",
   requireAuth,
-  UserController.confirmOwnProfileImage
+  UserController.confirmOwnProfileImage,
 );
 
 export { userRouter };

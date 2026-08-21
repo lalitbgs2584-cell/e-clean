@@ -12,6 +12,9 @@ import {
   startWorkerCleanup,
   presignWorkerImage,
   completeWorkerCleanup,
+  presignNoWasteProof,
+  submitNoWasteFound,
+  updateWorkerLocation,
 } from "../controllers/worker.controller";
 
 const workerRouter = Router();
@@ -21,6 +24,12 @@ const workerRouter = Router();
 
 workerRouter.get("/me", requireAuth, requireRole("WORKER"), getWorkerMe);
 workerRouter.get("/stats", requireAuth, requireRole("WORKER"), getWorkerStats);
+workerRouter.patch(
+  "/location",
+  requireAuth,
+  requireRole("WORKER"),
+  updateWorkerLocation,
+);
 
 // NOTE: /cleanups/history MUST be declared before /cleanups/:id to avoid
 // "history" being treated as the :id parameter.
@@ -28,49 +37,61 @@ workerRouter.get(
   "/cleanups/history",
   requireAuth,
   requireRole("WORKER"),
-  getWorkerHistory
+  getWorkerHistory,
 );
 workerRouter.get(
   "/cleanups",
   requireAuth,
   requireRole("WORKER"),
-  getWorkerCleanups
+  getWorkerCleanups,
 );
 workerRouter.get(
   "/cleanups/:id",
   requireAuth,
   requireRole("WORKER"),
-  getWorkerCleanupById
+  getWorkerCleanupById,
 );
 workerRouter.patch(
   "/cleanups/:id/accept",
   requireAuth,
   requireRole("WORKER"),
-  acceptWorkerCleanup
+  acceptWorkerCleanup,
 );
 workerRouter.patch(
   "/cleanups/:id/reject",
   requireAuth,
   requireRole("WORKER"),
-  rejectWorkerCleanup
+  rejectWorkerCleanup,
 );
 workerRouter.patch(
   "/cleanups/:id/start",
   requireAuth,
   requireRole("WORKER"),
-  startWorkerCleanup
+  startWorkerCleanup,
 );
 workerRouter.post(
   "/cleanups/:id/images/presign",
   requireAuth,
   requireRole("WORKER"),
-  presignWorkerImage
+  presignWorkerImage,
+);
+workerRouter.post(
+  "/cleanups/:id/no-waste/presign",
+  requireAuth,
+  requireRole("WORKER"),
+  presignNoWasteProof,
+);
+workerRouter.patch(
+  "/cleanups/:id/no-waste",
+  requireAuth,
+  requireRole("WORKER"),
+  submitNoWasteFound,
 );
 workerRouter.patch(
   "/cleanups/:id/complete",
   requireAuth,
   requireRole("WORKER"),
-  completeWorkerCleanup
+  completeWorkerCleanup,
 );
 
 export { workerRouter };

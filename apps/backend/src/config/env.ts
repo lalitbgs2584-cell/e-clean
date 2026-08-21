@@ -14,4 +14,8 @@ export const config = {
   cloudfrontDomain: process.env.CLOUDFRONT_DOMAIN || "",
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
   openaiApiKey: process.env.OPENAI_API_KEY || "",
+  reportImagePoints: Math.max(
+    0,
+    Number.parseInt(process.env.REPORT_IMAGE_POINTS || "1", 10) || 0,
+  ),
 };

@@ -19,6 +19,106 @@ import {
 const SELF_MANAGED_ROLES = ["CITIZEN", "AUTHORITY"];
 
 export class UserController {
+  private static monthStart() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+
+  private static async leaderboardRows(scope: "all" | "month") {
+    const reportsWhere =
+      scope === "month"
+        ? {
+            status: "VERIFIED" as const,
+            updatedAt: { gte: UserController.monthStart() },
+          }
+        : { status: "VERIFIED" as const };
+    const users = await prisma.user.findMany({
+      where: { role: "CITIZEN" },
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        points: true,
+        reports: { where: reportsWhere, select: { isLittererReport: true } },
+      },
+    });
+    return users
+      .map((user) => ({
+        id: user.id,
+        name: user.name,
+        image: user.image,
+        points:
+          scope === "all"
+            ? user.points
+            : user.reports.reduce(
+                (sum, report) => sum + (report.isLittererReport ? 50 : 10),
+                0,
+              ),
+      }))
+      .sort(
+        (left, right) =>
+          right.points - left.points || left.name.localeCompare(right.name),
+      );
+  }
+
+  public static async getLeaderboard(req: AuthenticatedRequest, res: Response) {
+    try {
+      const scope = req.query.scope === "month" ? "month" : "all";
+      const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+      const rows = await UserController.leaderboardRows(scope);
+      return res.json({
+        success: true,
+        data: rows
+          .slice(0, limit)
+          .map((row, index) => ({
+            ...row,
+            rank: index + 1,
+            profileImageUrl: profileImageUrl(row.image),
+          })),
+      });
+    } catch (error) {
+      console.error("getLeaderboard error:", error);
+      return res
+        .status(500)
+        .json({ success: false, error: "Failed to load leaderboard" });
+    }
+  }
+
+  public static async getMyRank(req: AuthenticatedRequest, res: Response) {
+    const userId = req.user?.id;
+    if (!userId)
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    try {
+      const scope = req.query.scope === "month" ? "month" : "all";
+      const rows = await UserController.leaderboardRows(scope);
+      const index = rows.findIndex((row) => row.id === userId);
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { points: true, wrongReportsCount: true, isActive: true },
+      });
+      return res.json({
+        success: true,
+        data: {
+          rank: index < 0 ? null : index + 1,
+          totalParticipants: rows.length,
+          points:
+            scope === "all"
+              ? (user?.points ?? 0)
+              : index < 0
+                ? 0
+                : (rows[index]?.points ?? 0),
+          wrongReportsCount: user?.wrongReportsCount ?? 0,
+          isActive: user?.isActive ?? false,
+        },
+      });
+    } catch (error) {
+      console.error("getMyRank error:", error);
+      return res
+        .status(500)
+        .json({ success: false, error: "Failed to load rank" });
+    }
+  }
+
   public static async getProfile(req: AuthenticatedRequest, res: Response) {
     try {
       const userId = req.user?.id;
@@ -42,7 +142,9 @@ export class UserController {
       });
 
       if (!user) {
-        return res.status(404).json({ success: false, error: "User not found" });
+        return res
+          .status(404)
+          .json({ success: false, error: "User not found" });
       }
 
       return res.json({
@@ -169,7 +271,9 @@ export class UserController {
         select: { image: true },
       });
       if (!current) {
-        return res.status(404).json({ success: false, error: "User not found" });
+        return res
+          .status(404)
+          .json({ success: false, error: "User not found" });
       }
 
       const user = await prisma.user.update({
