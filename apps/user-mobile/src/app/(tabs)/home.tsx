@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,28 +7,97 @@ import {
   Pressable,
   StatusBar,
   Image,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useCitizenStore } from '@/store/citizen-store';
+import {
+  getMyReports,
+  getMyRank,
+  getNotifications,
+  type CitizenReport,
+  type MyRank,
+} from '@/services/reportService';
+import { getCdnUrl } from '@/lib/cdn';
 
 export default function HomeDashboard() {
   const router = useRouter();
-  const { profile, reports, notifications } = useCitizenStore();
-
-  const resolvedCount = reports.filter((r) => r.status === 'Resolved').length;
-  const inProgressCount = reports.filter(
-    (r) => r.status === 'In Progress' || r.status === 'Under Review' || r.status === 'Assigned to Team'
-  ).length;
-  const totalCount = reports.length;
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  // Only use store for profile (name/avatar set by _layout.tsx from session)
+  const { profile } = useCitizenStore();
   const firstName = profile.name ? profile.name.split(' ')[0] : 'there';
+
+  const [reports, setReports] = useState<CitizenReport[]>([]);
+  const [rank, setRank] = useState<MyRank | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    try {
+      const [myReports, myRank, notifications] = await Promise.all([
+        getMyReports(),
+        getMyRank(),
+        getNotifications(),
+      ]);
+      setReports(myReports);
+      setRank(myRank);
+      setUnreadCount(notifications.filter((n) => !n.isRead).length);
+    } catch (err) {
+      console.warn('[home] failed to load data', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load(true);
+  }, [load]);
+
+  // Derive KPI counts from real DB statuses
+  const totalCount = reports.length;
+  const resolvedCount = reports.filter((r) =>
+    ['RESOLVED', 'VERIFIED'].includes(r.status),
+  ).length;
+  const inProgressCount = reports.filter((r) =>
+    ['ASSIGNED', 'IN_PROGRESS', 'CLEANUP_COMPLETED'].includes(r.status),
+  ).length;
+
+  const ecoPoints = rank?.points ?? 0;
+
+  // Status label + color for recent activity cards
+  function statusStyle(status: string): { bg: string; fg: string; label: string } {
+    if (['RESOLVED', 'VERIFIED'].includes(status))
+      return { bg: '#E8F0E5', fg: '#2F9E5C', label: status.replaceAll('_', ' ') };
+    if (['ASSIGNED', 'IN_PROGRESS', 'CLEANUP_COMPLETED'].includes(status))
+      return { bg: '#FEF6E8', fg: '#E3A93A', label: status.replaceAll('_', ' ') };
+    if (status === 'DISPUTED')
+      return { bg: '#FDE8E8', fg: '#D64545', label: 'DISPUTED' };
+    return { bg: '#F5F8F3', fg: '#6B7A70', label: status.replaceAll('_', ' ') };
+  }
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#2E7D4F"
+          />
+        }
+      >
         {/* Brand & Profile Top Header */}
         <View style={styles.topBrandingRow}>
           <View style={styles.brandContainer}>
@@ -48,7 +117,6 @@ export default function HomeDashboard() {
                 <Text style={styles.avatarFallbackText}>👤</Text>
               </View>
             )}
-            {/* Unread notification dot */}
             {unreadCount > 0 && <View style={styles.notifDot} />}
           </Pressable>
         </View>
@@ -73,39 +141,75 @@ export default function HomeDashboard() {
           </View>
         </Pressable>
 
+        {/* Report Litterer Banner Card */}
+        <Pressable
+          style={[styles.bannerCard, styles.littererCard]}
+          onPress={() => router.push('/report-litterer/capture')}
+        >
+          <View style={styles.bannerLeft}>
+            <View style={[styles.bannerBadge, styles.littererBadge]}>
+              <Text style={styles.bannerBadgeText}>CITIZEN ACTION</Text>
+            </View>
+            <Text style={styles.bannerTitle}>Report a Litterer</Text>
+            <Text style={styles.bannerSub}>Witnessed littering? Report them →</Text>
+          </View>
+          <View style={[styles.bannerPlusCircle, styles.littererCircle]}>
+            <Text style={styles.littererIcon}>🚯</Text>
+          </View>
+        </Pressable>
+
         {/* Stats KPI Cards */}
         <Text style={styles.sectionHeader}>My Activity</Text>
-        <View style={styles.kpiRow}>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiEmoji}>📋</Text>
-            <Text style={[styles.kpiValue, { color: '#6B7A70' }]}>{totalCount}</Text>
-            <Text style={styles.kpiLabel}>Total</Text>
+        {loading ? (
+          <View style={styles.kpiLoading}>
+            <ActivityIndicator color="#2E7D4F" />
           </View>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiEmoji}>⏳</Text>
-            <Text style={[styles.kpiValue, { color: '#E3A93A' }]}>{inProgressCount}</Text>
-            <Text style={styles.kpiLabel}>In Progress</Text>
+        ) : (
+          <View style={styles.kpiRow}>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiEmoji}>📋</Text>
+              <Text style={[styles.kpiValue, { color: '#6B7A70' }]}>{totalCount}</Text>
+              <Text style={styles.kpiLabel}>Total</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiEmoji}>⏳</Text>
+              <Text style={[styles.kpiValue, { color: '#E3A93A' }]}>{inProgressCount}</Text>
+              <Text style={styles.kpiLabel}>In Progress</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiEmoji}>✅</Text>
+              <Text style={[styles.kpiValue, { color: '#2F9E5C' }]}>{resolvedCount}</Text>
+              <Text style={styles.kpiLabel}>Resolved</Text>
+            </View>
           </View>
-          <View style={styles.kpiCard}>
-            <Text style={styles.kpiEmoji}>✅</Text>
-            <Text style={[styles.kpiValue, { color: '#2F9E5C' }]}>{resolvedCount}</Text>
-            <Text style={styles.kpiLabel}>Resolved</Text>
-          </View>
-        </View>
+        )}
 
-        {/* Eco-Points Card */}
+        {/* Eco-Points Card — backed by getMyRank() */}
         <View style={styles.ecoCard}>
           <View style={styles.ecoLeft}>
             <Text style={styles.ecoEmoji}>🌿</Text>
             <View>
               <Text style={styles.ecoLabel}>Eco-Points Earned</Text>
-              <Text style={styles.ecoSubtext}>Keep reporting to earn more!</Text>
+              <Text style={styles.ecoSubtext}>
+                {rank
+                  ? `Rank #${rank.rank ?? '—'} of ${rank.totalParticipants}`
+                  : 'Keep reporting to earn more!'}
+              </Text>
             </View>
           </View>
-          <View style={styles.ecoPointsBadge}>
-            <Text style={styles.ecoPoints}>{resolvedCount * 50}</Text>
-            <Text style={styles.ecoPtLabel}>pts</Text>
-          </View>
+          <Pressable
+            style={styles.ecoPointsBadge}
+            onPress={() => router.push('/leaderboard')}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FCFEFA" size="small" />
+            ) : (
+              <>
+                <Text style={styles.ecoPoints}>{ecoPoints}</Text>
+                <Text style={styles.ecoPtLabel}>pts</Text>
+              </>
+            )}
+          </Pressable>
         </View>
 
         {/* Recent Activity */}
@@ -117,36 +221,54 @@ export default function HomeDashboard() {
         </View>
 
         <View style={styles.activityList}>
-          {reports.slice(0, 3).map((item) => {
-            const isResolved = item.status === 'Resolved';
-            const isInProgress = item.status === 'In Progress' || item.status === 'Assigned to Team';
-            const badgeBg = isResolved ? '#E8F0E5' : isInProgress ? '#FEF6E8' : '#F5F8F3';
-            const badgeColor = isResolved ? '#2F9E5C' : isInProgress ? '#E3A93A' : '#6B7A70';
-
-            return (
-              <Pressable
-                key={item.id}
-                style={styles.activityCard}
-                onPress={() => router.push(`/report-tracking/${encodeURIComponent(item.id)}`)}>
-                <Image source={{ uri: item.photos[0] }} style={styles.activityThumb} />
-                <View style={styles.activityBody}>
-                  <View style={styles.activityTitleRow}>
-                    <Text style={styles.activityId}>{item.id}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: badgeBg }]}>
-                      <Text style={[styles.statusText, { color: badgeColor }]}>{item.status}</Text>
+          {loading && reports.length === 0 ? (
+            <ActivityIndicator color="#2E7D4F" style={{ marginVertical: 16 }} />
+          ) : reports.length === 0 ? (
+            <Text style={styles.emptyText}>No reports yet. Be the first to report!</Text>
+          ) : (
+            reports.slice(0, 3).map((item) => {
+              const image = item.images.find((img) => img.type === 'REPORT');
+              const thumb = getCdnUrl(image?.storagePath);
+              const { bg, fg, label } = statusStyle(item.status);
+              return (
+                <Pressable
+                  key={item.id}
+                  style={styles.activityCard}
+                  onPress={() => router.push(`/report-tracking/${encodeURIComponent(item.id)}`)}
+                >
+                  {thumb ? (
+                    <Image source={{ uri: thumb }} style={styles.activityThumb} />
+                  ) : (
+                    <View style={[styles.activityThumb, styles.thumbPlaceholder]}>
+                      <Text>📷</Text>
                     </View>
+                  )}
+                  <View style={styles.activityBody}>
+                    <View style={styles.activityTitleRow}>
+                      <Text style={styles.activityId}>#{item.id.slice(0, 8).toUpperCase()}</Text>
+                      <View style={[styles.statusBadge, { backgroundColor: bg }]}>
+                        <Text style={[styles.statusText, { color: fg }]}>{label}</Text>
+                      </View>
+                    </View>
+                    <Text numberOfLines={1} style={styles.activityLocation}>
+                      {item.location ?? `${item.latitude.toFixed(4)}, ${item.longitude.toFixed(4)}`}
+                    </Text>
+                    <Text style={styles.activityDate}>
+                      {new Date(item.createdAt).toLocaleString('en-IN', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      })}
+                    </Text>
                   </View>
-                  <Text style={styles.activityLocation}>{item.sector}, Rourkela</Text>
-                  <Text style={styles.activityDate}>{item.reportedDate}</Text>
-                </View>
-                <Text style={styles.arrowText}>›</Text>
-              </Pressable>
-            );
-          })}
+                  <Text style={styles.arrowText}>›</Text>
+                </Pressable>
+              );
+            })
+          )}
         </View>
 
         {/* Quick links row */}
-        <Text style={styles.sectionHeader} >Quick Actions</Text>
+        <Text style={styles.sectionHeader}>Quick Actions</Text>
         <View style={styles.quickRow}>
           <Pressable style={styles.quickTile} onPress={() => router.push('/map-view')}>
             <Text style={styles.quickIcon}>🗺️</Text>
@@ -260,7 +382,7 @@ const styles = StyleSheet.create({
     borderColor: '#FAFBF8',
   },
 
-  // Banner
+  // Banners
   bannerCard: {
     backgroundColor: '#2E7D4F',
     borderRadius: 20,
@@ -268,12 +390,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 14,
     shadowColor: 'rgba(46, 90, 60, 0.35)',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.8,
     shadowRadius: 20,
     elevation: 5,
+  },
+  littererCard: {
+    backgroundColor: '#4A3728',
+    shadowColor: 'rgba(74, 55, 40, 0.35)',
+    marginBottom: 24,
   },
   bannerLeft: {
     flex: 1,
@@ -289,12 +416,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(252,254,250,0.2)',
   },
-  bannerBadgeText: {
+  bannerBadgeText:{
     fontSize: 9,
     fontWeight: '800',
     color: 'rgba(252,254,250,0.8)',
     fontFamily: 'Plus Jakarta Sans',
     letterSpacing: 0.8,
+  },
+  littererBadge: {
+    backgroundColor: 'rgba(255,220,180,0.18)',
+    borderColor: 'rgba(255,200,130,0.25)',
   },
   bannerTitle: {
     fontSize: 20,
@@ -317,11 +448,18 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(252,254,250,0.3)',
   },
+  littererCircle: {
+    backgroundColor: 'rgba(255,200,130,0.15)',
+    borderColor: 'rgba(255,200,130,0.3)',
+  },
   bannerPlusText: {
     fontSize: 26,
     fontWeight: '800',
     color: '#FCFEFA',
     lineHeight: 30,
+  },
+  littererIcon: {
+    fontSize: 24,
   },
 
   // KPI
@@ -332,6 +470,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Sora',
     marginBottom: 12,
     marginTop: 4,
+  },
+  kpiLoading: {
+    height: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   kpiRow: {
     flexDirection: 'row',
@@ -411,6 +555,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 3,
+    minWidth: 64,
+    justifyContent: 'center',
   },
   ecoPoints: {
     fontSize: 20,
@@ -443,6 +589,12 @@ const styles = StyleSheet.create({
     gap: 10,
     marginBottom: 24,
   },
+  emptyText: {
+    textAlign: 'center',
+    color: '#6B7A70',
+    fontFamily: 'Plus Jakarta Sans',
+    paddingVertical: 12,
+  },
   activityCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -462,6 +614,11 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 10,
     marginRight: 12,
+  },
+  thumbPlaceholder: {
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   activityBody: {
     flex: 1,

@@ -213,7 +213,9 @@ export const generateAIBasedReport = async (
             reportId,
             imageId: image.id,
             points: config.reportImagePoints,
-            reason: "REPORT_IMAGE_UPLOAD",
+            // Small flat participation reward for submitting a report image.
+            // The main quality-based reward is awarded later on REPORT_VERIFIED.
+            reason: "REPORT_SUBMITTED_PARTICIPATION",
           })),
           skipDuplicates: true,
         });

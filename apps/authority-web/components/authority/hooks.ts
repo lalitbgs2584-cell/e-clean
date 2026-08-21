@@ -105,3 +105,43 @@ export function useAssignWorkerProfileImageMutation(token: string | null) {
     },
   });
 }
+
+export function useMapReportsQuery(
+  token: string | null,
+  filters: {
+    status?: string;
+    attention?: string;
+    category?: string;
+    zone?: string;
+    from?: string;
+    to?: string;
+  } = {},
+) {
+  return useQuery({
+    queryKey: ["authority", "map", "reports", filters],
+    queryFn: () => authorityApi.mapReports(token as string, filters),
+    enabled: Boolean(token),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useMapSummaryQuery(token: string | null) {
+  return useQuery({
+    queryKey: ["authority", "map", "summary"],
+    queryFn: () => authorityApi.mapSummary(token as string),
+    enabled: Boolean(token),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useMapWorkersQuery(token: string | null) {
+  return useQuery({
+    queryKey: ["authority", "map", "workers"],
+    queryFn: () => authorityApi.mapWorkers(token as string),
+    enabled: Boolean(token),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+}

@@ -254,9 +254,22 @@ export const verifyResolvedReport = async (
       });
 
       if (result === "VERIFIED") {
+        const verifiedPoints = report.isLittererReport ? 50 : 10;
+        // Write a ledger row first — the balance increment is inside the
+        // same transaction so they always stay in sync.
+        await tx.pointTransaction.create({
+          data: {
+            userId: report.userId,
+            reportId: report.id,
+            points: verifiedPoints,
+            reason: report.isLittererReport
+              ? "LITTERER_REPORT_VERIFIED"
+              : "REPORT_VERIFIED",
+          },
+        });
         await tx.user.update({
           where: { id: report.userId },
-          data: { points: { increment: report.isLittererReport ? 50 : 10 } },
+          data: { points: { increment: verifiedPoints } },
         });
       }
 
