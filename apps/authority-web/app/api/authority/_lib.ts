@@ -19,7 +19,7 @@ import {
   deriveWorkerName,
   getUrgencyLabel,
 } from "@/components/authority/shared";
-import { profileImageUrl } from "./_s3";
+import { cdnUrl, profileImageUrl } from "./_s3";
 
 function getBearerToken(request: Request) {
   const authHeader = request.headers.get("authorization") ?? request.headers.get("Authorization");
@@ -162,6 +162,7 @@ function serializeMedia(media: any): AuthorityMedia {
     id: media.id,
     type: media.type,
     storagePath: media.storagePath,
+    url: cdnUrl(media.storagePath),
     mediaType: media.mediaType,
     createdAt: toIso(media.createdAt) ?? new Date().toISOString(),
   };

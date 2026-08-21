@@ -1,0 +1,8 @@
+ALTER TYPE "CleanupStatus" ADD VALUE IF NOT EXISTS 'ACCEPTED';
+ALTER TYPE "CleanupStatus" ADD VALUE IF NOT EXISTS 'REJECTED';
+
+ALTER TABLE "cleanups"
+ADD COLUMN "acceptedAt" TIMESTAMP(3),
+ADD COLUMN "rejectedAt" TIMESTAMP(3),
+ADD COLUMN "rejectionReason" TEXT,
+ADD COLUMN "completionNotes" TEXT;

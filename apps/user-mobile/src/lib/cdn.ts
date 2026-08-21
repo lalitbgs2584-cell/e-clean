@@ -1,29 +1,35 @@
 import { config } from "@/config/env";
 
-/** Turns a persisted S3 object key into its CloudFront URL. */
-export function getCdnUrl(storagePath?: string | null) {
+/**
+ * ONE CloudFront distribution (config.cloudfrontDomain) serves the whole
+ * bucket. Stored keys already include their folder prefix (reports/,
+ * cleanups/, profiles/), so the URL is simply domain + key. Keys stay in the
+ * DB; URLs are never persisted.
+ */
+function toCdnUrl(storagePath?: string | null): string | undefined {
   if (!storagePath) return undefined;
   if (/^https?:\/\//i.test(storagePath) || storagePath.startsWith("file:")) {
     return storagePath;
   }
-  const domain = config.cloudfrontDomain
+  let domain = config.cloudfrontDomain
     .replace(/^https?:\/\//, "")
-    .replace(/\/$/, "");
+    .replace(/\/+$/, "");
+  
+  if (!domain && config.s3Bucket) {
+    domain = `${config.s3Bucket}.s3.${config.s3Region}.amazonaws.com`;
+  }
+
   return domain
-    ? `https://${domain}/${storagePath.replace(/^\//, "")}`
+    ? `https://${domain}/${storagePath.replace(/^\/+/, "")}`
     : undefined;
 }
 
-/** Turns a profile image S3 object key or filename into its CloudFront profile URL. */
-export function getCdnProfileUrl(storagePath?: string | null) {
-  if (!storagePath) return undefined;
-  if (/^https?:\/\//i.test(storagePath) || storagePath.startsWith("file:")) {
-    return storagePath;
-  }
-  const domain = (config.cloudfrontProfileDomain || config.cloudfrontDomain)
-    .replace(/^https?:\/\//, "")
-    .replace(/\/$/, "");
-  return domain
-    ? `https://${domain}/${storagePath.replace(/^\//, "")}`
-    : undefined;
-}
+/** Turns a persisted S3 object key into its CloudFront URL. */
+export const getCdnUrl = toCdnUrl;
+
+/**
+ * Turns a profile image S3 object key into its CloudFront URL. Same single
+ * distribution as report/cleanup media — profiles are served from the
+ * profiles/ prefix.
+ */
+export const getCdnProfileUrl = toCdnUrl;

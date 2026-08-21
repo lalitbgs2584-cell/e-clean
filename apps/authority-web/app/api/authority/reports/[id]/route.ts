@@ -94,6 +94,12 @@ export async function PATCH(
           { status: 404 },
         );
       }
+      if (!["AI_ASSESSED", "DISPUTED", "ASSIGNED"].includes(report.status)) {
+        return NextResponse.json(
+          { error: "Only AI-assessed or disputed reports can be assigned" },
+          { status: 409 },
+        );
+      }
 
       await prisma.$transaction([
         prisma.cleanup.upsert({
@@ -108,6 +114,14 @@ export async function PATCH(
             workerId: worker.id,
             assignedBy: authResult.session!.user.id,
             status: "ASSIGNED",
+            acceptedAt: null,
+            rejectedAt: null,
+            rejectionReason: null,
+            startedAt: null,
+            completedAt: null,
+            completionNotes: null,
+            beforeImageId: null,
+            afterImageId: null,
           },
         }),
         prisma.report.update({
@@ -120,82 +134,17 @@ export async function PATCH(
       ]);
     }
 
-    if (action === "start_cleanup") {
-      await prisma.cleanup.update({
-        where: { reportId: id },
-        data: {
-          status: "IN_PROGRESS",
-          startedAt: new Date(),
-        },
-      });
-
-      await prisma.report.update({
-        where: { id },
-        data: { status: "IN_PROGRESS" },
-      });
-    }
-
-    if (action === "complete_cleanup") {
-      await prisma.cleanup.update({
-        where: { reportId: id },
-        data: {
-          status: "COMPLETED",
-          completedAt: new Date(),
-        },
-      });
-
-      await prisma.report.update({
-        where: { id },
-        data: { status: "CLEANUP_COMPLETED" },
-      });
-    }
-
     if (action === "approve_cleanup") {
+      const cleanup = await prisma.cleanup.findUnique({ where: { reportId: id } });
+      if (report.status !== "CLEANUP_COMPLETED" || cleanup?.status !== "COMPLETED") {
+        return NextResponse.json(
+          { error: "Worker cleanup evidence must be submitted before approval" },
+          { status: 409 },
+        );
+      }
       await prisma.report.update({
         where: { id },
         data: { status: "RESOLVED", resolvedAt: new Date() },
-      });
-    }
-
-    if (action === "mark_verified") {
-      await prisma.report.update({
-        where: { id },
-        data: { status: "VERIFIED", resolvedAt: new Date() },
-      });
-
-      await prisma.reportVerification.upsert({
-        where: { reportId: id },
-        create: {
-          reportId: id,
-          userId: authResult.session!.user.id,
-          result: "VERIFIED",
-          comment: body?.note ?? null,
-        },
-        update: {
-          result: "VERIFIED",
-          comment: body?.note ?? null,
-        },
-      });
-    }
-
-    if (action === "mark_disputed") {
-      await prisma.report.update({
-        where: { id },
-        data: { status: "DISPUTED" },
-      });
-
-      await prisma.reportVerification.upsert({
-        where: { reportId: id },
-        create: {
-          reportId: id,
-          userId: authResult.session!.user.id,
-          result: "DISPUTED",
-          comment: body?.note ?? null,
-        },
-        update: {
-          result: "DISPUTED",
-          comment: body?.note ?? null,
-        },
       });
     }
 

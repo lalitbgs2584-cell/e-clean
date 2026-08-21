@@ -93,7 +93,7 @@ export class UserController {
       }
 
       const uploadId = crypto.randomUUID();
-      const key = profileImageKey(userId, uploadId);
+      const key = profileImageKey(userId, uploadId, mime);
 
       const url = await getSignedUrl(
         s3Client,

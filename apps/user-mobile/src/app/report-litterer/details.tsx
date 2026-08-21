@@ -5,14 +5,11 @@ import {
   StyleSheet,
   Pressable,
   StatusBar,
-  ScrollView,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLittererStore, LittererGender } from '@/store/litterer-store';
+import { ContentWithBottomBar } from '@/components/layout/ContentWithBottomBar';
 
 export default function DetailsScreen() {
   const router = useRouter();
@@ -42,150 +39,139 @@ export default function DetailsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>←</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>Incident Details</Text>
-          <View style={styles.headerPlaceholder} />
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          {/* Section 2: When & Where */}
-          <Text style={styles.sectionStep}>2. When & Where</Text>
-          <Text style={styles.sectionSubtitle}>Tell us when and where it happened</Text>
-
-          {/* Location field */}
-          <View style={styles.locationContainer}>
-            <View style={styles.locationLeft}>
-              <Text style={styles.pinIcon}>📍</Text>
-              <View style={styles.locationTexts}>
-                <Text style={styles.locationLabel}>Location</Text>
-                <Text style={styles.locationValue}>{location}</Text>
-              </View>
-            </View>
-            <Pressable style={styles.changeBtn}>
-              <Text style={styles.changeBtnText}>Change</Text>
+    <ContentWithBottomBar
+      keyboardAvoiding
+      header={
+        <>
+          <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => router.back()} style={styles.backBtn}>
+              <Text style={styles.backText}>←</Text>
             </Pressable>
+            <Text style={styles.headerTitle}>Incident Details</Text>
+            <View style={styles.headerPlaceholder} />
           </View>
-
-          {/* Date & Time selectors */}
-          <View style={styles.dateTimeRow}>
-            <View style={styles.dateTimeCol}>
-              <Text style={styles.fieldLabel}>Date & Time</Text>
-              <View style={styles.dateTimeInputBox}>
-                <Text style={styles.dateTimeText}>{date}</Text>
-              </View>
-            </View>
-            <View style={styles.dateTimeCol}>
-              <Text style={styles.fieldLabel}>Approx. Time</Text>
-              <View style={styles.dateTimeInputBox}>
-                <Text style={styles.dateTimeText}>🕒 {approxTime}</Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Description (Optional) */}
-          <View style={styles.descriptionHeader}>
-            <Text style={styles.fieldLabel}>Description (Optional)</Text>
-            <Text style={styles.charCounter}>{description.length}/200</Text>
-          </View>
-          <TextInput
-            style={styles.textArea}
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Any additional details about the incident..."
-            placeholderTextColor="#6B7A70"
-            multiline
-            numberOfLines={4}
-            maxLength={200}
-          />
-
-          {/* Section 3: Litterer Details */}
-          <Text style={[styles.sectionStep, { marginTop: 12 }]}>3. Litterer Details (Optional)</Text>
-          <Text style={styles.sectionSubtitle}>Provide details if visible</Text>
-
-          {/* Gender Selectors */}
-          <View style={styles.genderRow}>
-            {(['Male', 'Female', 'Others'] as LittererGender[]).map((g) => (
-              <Pressable
-                key={g}
-                style={[styles.genderChip, gender === g && styles.genderChipSelected]}
-                onPress={() => setGender(g)}>
-                <Text style={[styles.genderChipText, gender === g && styles.genderChipTextSelected]}>
-                  {g === 'Male' ? '👦 Male' : g === 'Female' ? '👧 Female' : '👤 Others'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-          <Pressable
-            style={[
-              styles.preferNotSayBtn,
-              gender === 'Prefer not to say' && styles.preferNotSayBtnSelected,
-            ]}
-            onPress={() => setGender('Prefer not to say')}>
-            <Text
-              style={[
-                styles.preferNotSayText,
-                gender === 'Prefer not to say' && styles.preferNotSayTextSelected,
-              ]}>
-              🙈 Prefer not to say
-            </Text>
-          </Pressable>
-
-          {/* Approx Age & Clothing */}
-          <View style={styles.dateTimeRow}>
-            <View style={styles.dateTimeCol}>
-              <Text style={styles.fieldLabel}>Approx. Age</Text>
-              <TextInput
-                style={styles.textInput}
-                value={approxAge}
-                onChangeText={setApproxAge}
-                placeholder="e.g. 20-30 years"
-                placeholderTextColor="#6B7A70"
-              />
-            </View>
-            <View style={styles.dateTimeCol}>
-              <Text style={styles.fieldLabel}>Clothing (Optional)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={clothing}
-                onChangeText={setClothing}
-                placeholder="e.g. Blue shirt"
-                placeholderTextColor="#6B7A70"
-              />
-            </View>
-          </View>
-        </ScrollView>
-
-        {/* Footer Next Button */}
+        </>
+      }
+      contentContainerStyle={styles.scrollContent}
+      footer={
         <View style={styles.footer}>
           <Pressable style={styles.nextBtn} onPress={handleNext}>
             <Text style={styles.nextBtnText}>Next</Text>
           </Pressable>
         </View>
+      }
+    >
+      {/* Section 2: When & Where */}
+      <Text style={styles.sectionStep}>2. When & Where</Text>
+      <Text style={styles.sectionSubtitle}>Tell us when and where it happened</Text>
+
+      {/* Location field */}
+      <View style={styles.locationContainer}>
+        <View style={styles.locationLeft}>
+          <Text style={styles.pinIcon}>📍</Text>
+          <View style={styles.locationTexts}>
+            <Text style={styles.locationLabel}>Location</Text>
+            <Text style={styles.locationValue}>{location}</Text>
+          </View>
         </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <Pressable style={styles.changeBtn}>
+          <Text style={styles.changeBtnText}>Change</Text>
+        </Pressable>
+      </View>
+
+      {/* Date & Time selectors */}
+      <View style={styles.dateTimeRow}>
+        <View style={styles.dateTimeCol}>
+          <Text style={styles.fieldLabel}>Date & Time</Text>
+          <View style={styles.dateTimeInputBox}>
+            <Text style={styles.dateTimeText}>{date}</Text>
+          </View>
+        </View>
+        <View style={styles.dateTimeCol}>
+          <Text style={styles.fieldLabel}>Approx. Time</Text>
+          <View style={styles.dateTimeInputBox}>
+            <Text style={styles.dateTimeText}>🕒 {approxTime}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Description (Optional) */}
+      <View style={styles.descriptionHeader}>
+        <Text style={styles.fieldLabel}>Description (Optional)</Text>
+        <Text style={styles.charCounter}>{description.length}/200</Text>
+      </View>
+      <TextInput
+        style={styles.textArea}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Any additional details about the incident..."
+        placeholderTextColor="#6B7A70"
+        multiline
+        numberOfLines={4}
+        maxLength={200}
+      />
+
+      {/* Section 3: Litterer Details */}
+      <Text style={[styles.sectionStep, { marginTop: 12 }]}>3. Litterer Details (Optional)</Text>
+      <Text style={styles.sectionSubtitle}>Provide details if visible</Text>
+
+      {/* Gender Selectors */}
+      <View style={styles.genderRow}>
+        {(['Male', 'Female', 'Others'] as LittererGender[]).map((g) => (
+          <Pressable
+            key={g}
+            style={[styles.genderChip, gender === g && styles.genderChipSelected]}
+            onPress={() => setGender(g)}>
+            <Text style={[styles.genderChipText, gender === g && styles.genderChipTextSelected]}>
+              {g === 'Male' ? '👦 Male' : g === 'Female' ? '👧 Female' : '👤 Others'}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+      <Pressable
+        style={[
+          styles.preferNotSayBtn,
+          gender === 'Prefer not to say' && styles.preferNotSayBtnSelected,
+        ]}
+        onPress={() => setGender('Prefer not to say')}>
+        <Text
+          style={[
+            styles.preferNotSayText,
+            gender === 'Prefer not to say' && styles.preferNotSayTextSelected,
+          ]}>
+          🙈 Prefer not to say
+        </Text>
+      </Pressable>
+
+      {/* Approx Age & Clothing */}
+      <View style={styles.dateTimeRow}>
+        <View style={styles.dateTimeCol}>
+          <Text style={styles.fieldLabel}>Approx. Age</Text>
+          <TextInput
+            style={styles.textInput}
+            value={approxAge}
+            onChangeText={setApproxAge}
+            placeholder="e.g. 20-30 years"
+            placeholderTextColor="#6B7A70"
+          />
+        </View>
+        <View style={styles.dateTimeCol}>
+          <Text style={styles.fieldLabel}>Clothing (Optional)</Text>
+          <TextInput
+            style={styles.textInput}
+            value={clothing}
+            onChangeText={setClothing}
+            placeholder="e.g. Blue shirt"
+            placeholderTextColor="#6B7A70"
+          />
+        </View>
+      </View>
+    </ContentWithBottomBar>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FAFBF8',
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

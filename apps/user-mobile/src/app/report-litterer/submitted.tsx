@@ -7,15 +7,14 @@ import {
   StatusBar,
   Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { ContentWithBottomBar } from '@/components/layout/ContentWithBottomBar';
 
 export default function LittererSubmittedScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const reportId = id || '#LR00000';
 
-  // Animation values
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
@@ -37,60 +36,58 @@ export default function LittererSubmittedScreen() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
+    <ContentWithBottomBar
+      scrollable={false}
+      items={<StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />}
+      contentContainerStyle={styles.bodyPad}
+      body={
+        <View style={styles.content}>
+          <Animated.View style={[styles.checkCircle, { transform: [{ scale: scaleAnim }] }]}>
+            <Text style={styles.checkIcon}>✓</Text>
+          </Animated.View>
 
-      <View style={styles.content}>
-        {/* Animated Check Badge */}
-        <Animated.View style={[styles.checkCircle, { transform: [{ scale: scaleAnim }] }]}>
-          <Text style={styles.checkIcon}>✓</Text>
-        </Animated.View>
-
-        <Animated.View style={{ opacity: fadeAnim, alignItems: 'center' }}>
-          <Text style={styles.title}>Report Submitted!</Text>
-          <Text style={styles.subtitle}>
-            Thank you for helping keep your community clean. Authorities have been notified.
-          </Text>
-
-          {/* Report ID Box */}
-          <View style={styles.reportIdBox}>
-            <Text style={styles.reportIdLabel}>Report ID</Text>
-            <Text style={styles.reportIdValue}>{reportId}</Text>
-          </View>
-
-          {/* Info Banner */}
-          <View style={styles.infoBanner}>
-            <Text style={styles.infoBannerEmoji}>🛡️</Text>
-            <Text style={styles.infoBannerText}>
-              Your identity remains anonymous. We will take action within 24 hours.
+          <Animated.View style={{ opacity: fadeAnim, alignItems: 'center' }}>
+            <Text style={styles.title}>Report Submitted!</Text>
+            <Text style={styles.subtitle}>
+              Thank you for helping keep your community clean. Authorities have been notified.
             </Text>
-          </View>
-        </Animated.View>
-      </View>
 
-      <View style={styles.footer}>
-        <Pressable
-          style={styles.backHomeBtn}
-          onPress={() => router.replace('/(tabs)/home')}>
-          <Text style={styles.backHomeBtnText}>Back to Home</Text>
-        </Pressable>
+            <View style={styles.reportIdBox}>
+              <Text style={styles.reportIdLabel}>Report ID</Text>
+              <Text style={styles.reportIdValue}>{reportId}</Text>
+            </View>
 
-        <Pressable
-          style={styles.secondaryBtn}
-          onPress={() => router.push('/report-litterer/select-type')}>
-          <Text style={styles.secondaryBtnText}>Report Another</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+            <View style={styles.infoBanner}>
+              <Text style={styles.infoBannerEmoji}>🛡️</Text>
+              <Text style={styles.infoBannerText}>
+                Your identity remains anonymous. We will take action within 24 hours.
+              </Text>
+            </View>
+          </Animated.View>
+        </View>
+      }
+      footer={
+        <View style={styles.footer}>
+          <Pressable
+            style={styles.backHomeBtn}
+            onPress={() => router.replace('/(tabs)/home')}>
+            <Text style={styles.backHomeBtnText}>Back to Home</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.secondaryBtn}
+            onPress={() => router.push('/report-litterer/select-type')}>
+            <Text style={styles.secondaryBtnText}>Report Another</Text>
+          </Pressable>
+        </View>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FAFBF8',
-    justifyContent: 'space-between',
-    padding: 24,
+  bodyPad: {
+    paddingHorizontal: 24,
   },
   content: {
     flex: 1,
@@ -184,7 +181,8 @@ const styles = StyleSheet.create({
   },
   footer: {
     gap: 12,
-    marginBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 4,
   },
   backHomeBtn: {
     backgroundColor: '#2E7D4F',

@@ -7,6 +7,8 @@ import {
   getWorkerCleanups,
   getWorkerHistory,
   getWorkerCleanupById,
+  acceptWorkerCleanup,
+  rejectWorkerCleanup,
   startWorkerCleanup,
   presignWorkerImage,
   completeWorkerCleanup,
@@ -39,6 +41,18 @@ workerRouter.get(
   requireAuth,
   requireRole("WORKER"),
   getWorkerCleanupById
+);
+workerRouter.patch(
+  "/cleanups/:id/accept",
+  requireAuth,
+  requireRole("WORKER"),
+  acceptWorkerCleanup
+);
+workerRouter.patch(
+  "/cleanups/:id/reject",
+  requireAuth,
+  requireRole("WORKER"),
+  rejectWorkerCleanup
 );
 workerRouter.patch(
   "/cleanups/:id/start",

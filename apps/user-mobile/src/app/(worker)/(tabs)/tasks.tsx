@@ -22,6 +22,8 @@ const FILTERS: { label: string; value: FilterTab }[] = [
 
 const STATUS_CONFIG: Record<CleanupStatus, { label: string; bg: string; color: string }> = {
   ASSIGNED:    { label: 'Assigned',    bg: '#FEF6E8', color: '#E3A93A' },
+  ACCEPTED:    { label: 'Accepted',    bg: '#E8F5E9', color: '#2E7D4F' },
+  REJECTED:    { label: 'Rejected',    bg: '#FFF2F2', color: '#D64545' },
   IN_PROGRESS: { label: 'In Progress', bg: '#EFF6FF', color: '#3B82F6' },
   COMPLETED:   { label: 'Completed',   bg: '#E8F5E9', color: '#2E7D4F' },
   CANCELLED:   { label: 'Cancelled',   bg: '#FFF2F2', color: '#D64545' },
@@ -71,7 +73,7 @@ export default function WorkerTasksScreen() {
     return (
       <Pressable
         style={styles.card}
-        onPress={() => router.push(`/(worker)/task/${item.id}/index` as any)}>
+        onPress={() => router.push(`/(worker)/task/${item.id}` as any)}>
         {/* Status accent bar */}
         <View style={[styles.accentBar, { backgroundColor: cfg.color }]} />
 

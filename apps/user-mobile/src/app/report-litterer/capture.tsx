@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, StatusBar, Image, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLittererStore } from '@/store/litterer-store';
+import { ContentWithBottomBar } from '@/components/layout/ContentWithBottomBar';
 
 export default function CaptureScreen() {
   const router = useRouter();
@@ -31,78 +31,21 @@ export default function CaptureScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>←</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>Report a Litterer</Text>
-          <View style={styles.headerPlaceholder} />
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Text style={styles.sectionStep}>1. Capture Evidence</Text>
-          <Text style={styles.sectionSubtitle}>Add clear photos or videos</Text>
-
-          {/* Viewfinder/Preview Area */}
-          <View style={styles.evidenceContainer}>
-            {photos.length > 0 ? (
-              <View style={styles.previewWrapper}>
-                <Image source={{ uri: photos[0] }} style={styles.previewImage} resizeMode="cover" />
-                <Pressable style={styles.removeBtn} onPress={() => handleRemovePhoto(0)}>
-                  <Text style={styles.removeText}>✕</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View style={styles.placeholderBox}>
-                <Text style={styles.placeholderEmoji}>📸</Text>
-                <Text style={styles.placeholderTitle}>No evidence captured yet</Text>
-                <Text style={styles.placeholderSub}>Capture clear photos or videos of the incident</Text>
-              </View>
-            )}
-
-            {/* Uploaded thumbnails */}
-            {photos.length > 1 && (
-              <View style={styles.thumbnailRow}>
-                {photos.map((uri, idx) => (
-                  <View key={idx} style={styles.thumbWrapper}>
-                    <Image source={{ uri }} style={styles.thumbImage} />
-                    <Pressable style={styles.thumbRemoveBtn} onPress={() => handleRemovePhoto(idx)}>
-                      <Text style={styles.thumbRemoveText}>✕</Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-
-          {/* Add Actions */}
-          <View style={styles.actionButtonsRow}>
-            <Pressable style={styles.actionBtn} onPress={handleAddPhoto}>
-              <Text style={styles.actionIcon}>📸</Text>
-              <Text style={styles.actionText}>Add Photo</Text>
+    <ContentWithBottomBar
+      header={
+        <>
+          <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => router.back()} style={styles.backBtn}>
+              <Text style={styles.backText}>←</Text>
             </Pressable>
-            <Pressable style={styles.actionBtn} onPress={handleAddPhoto}>
-              <Text style={styles.actionIcon}>📹</Text>
-              <Text style={styles.actionText}>Add Video</Text>
-            </Pressable>
+            <Text style={styles.headerTitle}>Report a Litterer</Text>
+            <View style={styles.headerPlaceholder} />
           </View>
-
-          {/* Tips Panel */}
-          <View style={styles.tipsCard}>
-            <Text style={styles.tipsTitle}>💡 Tips for better evidence</Text>
-            <View style={styles.tipsList}>
-              <Text style={styles.tipItem}>• Capture the act clearly</Text>
-              <Text style={styles.tipItem}>• Include surroundings</Text>
-              <Text style={styles.tipItem}>• Avoid blurry images</Text>
-            </View>
-          </View>
-        </ScrollView>
-
-        {/* Next Button */}
+        </>
+      }
+      contentContainerStyle={styles.scrollContent}
+      footer={
         <View style={styles.footer}>
           <Pressable
             style={[styles.nextBtn, photos.length === 0 && styles.nextBtnDisabled]}
@@ -111,20 +54,69 @@ export default function CaptureScreen() {
             <Text style={styles.nextBtnText}>Next</Text>
           </Pressable>
         </View>
+      }
+    >
+      <Text style={styles.sectionStep}>1. Capture Evidence</Text>
+      <Text style={styles.sectionSubtitle}>Add clear photos or videos</Text>
+
+      {/* Viewfinder/Preview Area */}
+      <View style={styles.evidenceContainer}>
+        {photos.length > 0 ? (
+          <View style={styles.previewWrapper}>
+            <Image source={{ uri: photos[0] }} style={styles.previewImage} resizeMode="cover" />
+            <Pressable style={styles.removeBtn} onPress={() => handleRemovePhoto(0)}>
+              <Text style={styles.removeText}>✕</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.placeholderBox}>
+            <Text style={styles.placeholderEmoji}>📸</Text>
+            <Text style={styles.placeholderTitle}>No evidence captured yet</Text>
+            <Text style={styles.placeholderSub}>Capture clear photos or videos of the incident</Text>
+          </View>
+        )}
+
+        {/* Uploaded thumbnails */}
+        {photos.length > 1 && (
+          <View style={styles.thumbnailRow}>
+            {photos.map((uri, idx) => (
+              <View key={idx} style={styles.thumbWrapper}>
+                <Image source={{ uri }} style={styles.thumbImage} />
+                <Pressable style={styles.thumbRemoveBtn} onPress={() => handleRemovePhoto(idx)}>
+                  <Text style={styles.thumbRemoveText}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
-    </SafeAreaView>
+
+      {/* Add Actions */}
+      <View style={styles.actionButtonsRow}>
+        <Pressable style={styles.actionBtn} onPress={handleAddPhoto}>
+          <Text style={styles.actionIcon}>📸</Text>
+          <Text style={styles.actionText}>Add Photo</Text>
+        </Pressable>
+        <Pressable style={styles.actionBtn} onPress={handleAddPhoto}>
+          <Text style={styles.actionIcon}>📹</Text>
+          <Text style={styles.actionText}>Add Video</Text>
+        </Pressable>
+      </View>
+
+      {/* Tips Panel */}
+      <View style={styles.tipsCard}>
+        <Text style={styles.tipsTitle}>💡 Tips for better evidence</Text>
+        <View style={styles.tipsList}>
+          <Text style={styles.tipItem}>• Capture the act clearly</Text>
+          <Text style={styles.tipItem}>• Include surroundings</Text>
+          <Text style={styles.tipItem}>• Avoid blurry images</Text>
+        </View>
+      </View>
+    </ContentWithBottomBar>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FAFBF8',
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

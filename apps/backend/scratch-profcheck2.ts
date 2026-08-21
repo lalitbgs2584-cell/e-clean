@@ -1,0 +1,46 @@
+import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+
+const client = new S3Client({
+  region: process.env.S3_REGION!,
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
+  },
+});
+const bucket = process.env.S3_BUCKET!;
+
+const keys = [
+  "profiles/_probe.txt",
+  "profiles/cmt1pb1mh00003wv5j82og59u/avatar-137470ce-903e-477e-8fca-c0be4814cd6b.jpg",
+  "profile/cmt1pb1mh00003wv5j82og59u/avatar-137470ce-903e-477e-8fca-c0be4814cd6b.jpg",
+];
+
+for (const key of keys) {
+  try {
+    const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    console.log("HEAD EXISTS:", key, "len=", head.ContentLength, "etag=", head.ETag);
+  } catch (e: any) {
+    console.log("HEAD FAIL:", key, "->", e.$metadata?.httpStatusCode, e.name);
+  }
+  try {
+    const got = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const buf = await got.Body?.transformToByteArray();
+    console.log("GET OK:", key, "len=", buf?.length);
+  } catch (e: any) {
+    console.log("GET FAIL:", key, "->", e.$metadata?.httpStatusCode, e.name);
+  }
+}
+
+try {
+  await client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: "profile/_probe2.txt",
+      Body: "probe2",
+      ContentType: "text/plain",
+    }),
+  );
+  console.log("WRITE OK to profile/_probe2.txt");
+} catch (e: any) {
+  console.log("WRITE DENIED to profile/:", e.$metadata?.httpStatusCode, e.name);
+}

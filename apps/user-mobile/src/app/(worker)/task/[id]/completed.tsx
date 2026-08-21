@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable,
+  View, Text, StyleSheet, Pressable,
   StatusBar, Image, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, {
   FadeIn, useSharedValue, useAnimatedStyle,
   withSpring, withDelay,
 } from 'react-native-reanimated';
+import { ContentWithBottomBar } from '@/components/layout/ContentWithBottomBar';
 import { getCdnUrl } from '@/lib/cdn';
 import { getWorkerCleanup, type WorkerCleanup } from '@/services/workerService';
 
@@ -23,9 +23,9 @@ const wasteCategoryLabel: Record<string, string> = {
 const formatDateTime = (iso?: string | null) =>
   iso
     ? new Date(iso).toLocaleString('en-IN', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      })
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
     : '—';
 
 // ---- component --------------------------------------------------------------
@@ -61,9 +61,15 @@ export default function TaskCompletedScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}><ActivityIndicator color="#2E7D4F" size="large" /></View>
-      </SafeAreaView>
+      <ContentWithBottomBar
+        scrollable={false}
+        contentContainerStyle={{ flex: 1 }}
+        body={
+          <View style={styles.centered}>
+            <ActivityIndicator color="#2E7D4F" size="large" />
+          </View>
+        }
+      />
     );
   }
 
@@ -72,102 +78,99 @@ export default function TaskCompletedScreen() {
   const afterUrl = getCdnUrl(cleanup?.afterImage?.storagePath);
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* Success hero */}
-        <Animated.View entering={FadeIn.duration(400)} style={styles.heroSection}>
-          <Animated.View style={[styles.checkCircle, checkStyle]}>
-            <Text style={styles.checkIcon}>✓</Text>
-          </Animated.View>
-          <Text style={styles.heroTitle}>Great Job!</Text>
-          <Text style={styles.heroSubtitle}>You completed the task.</Text>
+    <ContentWithBottomBar
+      contentContainerStyle={styles.scroll}
+      footer={
+        <View style={styles.ctaContainer}>
+          <Pressable
+            style={styles.backBtn}
+            onPress={() => router.replace('/(worker)/(tabs)/tasks' as any)}>
+            <Text style={styles.backBtnText}>← Back to My Tasks</Text>
+          </Pressable>
+        </View>
+      }
+      items={<StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />}
+    >
+      {/* Success hero */}
+      <Animated.View entering={FadeIn.duration(400)} style={styles.heroSection}>
+        <Animated.View style={[styles.checkCircle, checkStyle]}>
+          <Text style={styles.checkIcon}>✓</Text>
         </Animated.View>
+        <Text style={styles.heroTitle}>Great Job!</Text>
+        <Text style={styles.heroSubtitle}>You completed the task.</Text>
+      </Animated.View>
 
-        {/* Summary card */}
-        <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Task Summary</Text>
+      {/* Summary card */}
+      <Animated.View entering={FadeIn.delay(200).duration(400)} style={styles.summaryCard}>
+        <Text style={styles.summaryTitle}>Task Summary</Text>
 
-          {[
-            { icon: '🆔', label: 'Task ID', value: cleanup?.id?.slice(0, 16).toUpperCase() ?? '—' },
-            { icon: '📍', label: 'Location', value: report?.zone ?? `${report?.latitude?.toFixed(5) ?? '—'}, ${report?.longitude?.toFixed(5) ?? '—'}` },
-            { icon: '🗑️', label: 'Waste Type', value: wasteCategoryLabel[report?.wasteCategory ?? ''] ?? 'Unknown' },
-            { icon: '📅', label: 'Completed', value: formatDateTime(cleanup?.completedAt) },
-          ].map((row) => (
-            <View key={row.label} style={styles.summaryRow}>
-              <Text style={styles.rowIcon}>{row.icon}</Text>
-              <View style={styles.rowRight}>
-                <Text style={styles.rowLabel}>{row.label}</Text>
-                <Text style={styles.rowValue} numberOfLines={2}>{row.value}</Text>
-              </View>
+        {[
+          { icon: '🆔', label: 'Task ID', value: cleanup?.id?.slice(0, 16).toUpperCase() ?? '—' },
+          { icon: '📍', label: 'Location', value: report?.zone ?? `${report?.latitude?.toFixed(5) ?? '—'}, ${report?.longitude?.toFixed(5) ?? '—'}` },
+          { icon: '🗑️', label: 'Waste Type', value: wasteCategoryLabel[report?.wasteCategory ?? ''] ?? 'Unknown' },
+          { icon: '📅', label: 'Completed', value: formatDateTime(cleanup?.completedAt) },
+        ].map((row) => (
+          <View key={row.label} style={styles.summaryRow}>
+            <Text style={styles.rowIcon}>{row.icon}</Text>
+            <View style={styles.rowRight}>
+              <Text style={styles.rowLabel}>{row.label}</Text>
+              <Text style={styles.rowValue} numberOfLines={2}>{row.value}</Text>
             </View>
-          ))}
-        </Animated.View>
+          </View>
+        ))}
+      </Animated.View>
 
-        {/* Before / After photos */}
-        {(beforeUrl || afterUrl) && (
-          <Animated.View entering={FadeIn.delay(350).duration(400)} style={styles.photosCard}>
-            <Text style={styles.photosTitle}>Before & After Photos</Text>
-            <View style={styles.photoPair}>
-              <View style={styles.photoSlot}>
-                <Text style={styles.photoSlotLabel}>Before</Text>
-                {beforeUrl ? (
-                  <Image source={{ uri: beforeUrl }} style={styles.photoImg} resizeMode="cover" />
-                ) : (
-                  <View style={[styles.photoImg, styles.photoMissing]}>
-                    <Text style={styles.photoMissingText}>—</Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.photoDivider} />
-              <View style={styles.photoSlot}>
-                <Text style={styles.photoSlotLabel}>After</Text>
-                {afterUrl ? (
-                  <Image source={{ uri: afterUrl }} style={styles.photoImg} resizeMode="cover" />
-                ) : (
-                  <View style={[styles.photoImg, styles.photoMissing]}>
-                    <Text style={styles.photoMissingText}>—</Text>
-                  </View>
-                )}
-              </View>
+      {/* Before / After photos */}
+      {(beforeUrl || afterUrl) && (
+        <Animated.View entering={FadeIn.delay(350).duration(400)} style={styles.photosCard}>
+          <Text style={styles.photosTitle}>Before & After Photos</Text>
+          <View style={styles.photoPair}>
+            <View style={styles.photoSlot}>
+              <Text style={styles.photoSlotLabel}>Before</Text>
+              {beforeUrl ? (
+                <Image source={{ uri: beforeUrl }} style={styles.photoImg} resizeMode="cover" />
+              ) : (
+                <View style={[styles.photoImg, styles.photoMissing]}>
+                  <Text style={styles.photoMissingText}>—</Text>
+                </View>
+              )}
             </View>
-          </Animated.View>
-        )}
-
-        {/* Pending verification notice */}
-        <Animated.View entering={FadeIn.delay(450).duration(400)} style={styles.pendingCard}>
-          <Text style={styles.pendingIcon}>⏳</Text>
-          <View style={styles.pendingBody}>
-            <Text style={styles.pendingTitle}>Pending Verification</Text>
-            <Text style={styles.pendingSubtitle}>
-              The authority will verify the task and update the status. Thank you for your service!
-            </Text>
+            <View style={styles.photoDivider} />
+            <View style={styles.photoSlot}>
+              <Text style={styles.photoSlotLabel}>After</Text>
+              {afterUrl ? (
+                <Image source={{ uri: afterUrl }} style={styles.photoImg} resizeMode="cover" />
+              ) : (
+                <View style={[styles.photoImg, styles.photoMissing]}>
+                  <Text style={styles.photoMissingText}>—</Text>
+                </View>
+              )}
+            </View>
           </View>
         </Animated.View>
+      )}
 
-      </ScrollView>
-
-      {/* Back to tasks */}
-      <View style={styles.ctaContainer}>
-        <Pressable
-          style={styles.backBtn}
-          onPress={() => router.replace('/(worker)/(tabs)/tasks' as any)}>
-          <Text style={styles.backBtnText}>← Back to My Tasks</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+      {/* Pending verification notice */}
+      <Animated.View entering={FadeIn.delay(450).duration(400)} style={styles.pendingCard}>
+        <Text style={styles.pendingIcon}>⏳</Text>
+        <View style={styles.pendingBody}>
+          <Text style={styles.pendingTitle}>Pending Verification</Text>
+          <Text style={styles.pendingSubtitle}>
+            The authority will verify the task and update the status. Thank you for your service!
+          </Text>
+        </View>
+      </Animated.View>
+    </ContentWithBottomBar>
   );
 }
 
 // ---- styles -----------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  scroll: { padding: 20 },
   safeArea: { flex: 1, backgroundColor: '#FAFBF8' },
-  scroll: { padding: 20, paddingBottom: 120 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
-  // Hero
   heroSection: { alignItems: 'center', paddingVertical: 32, gap: 12 },
   checkCircle: {
     width: 80, height: 80, borderRadius: 40, backgroundColor: '#2E7D4F',
@@ -248,8 +251,7 @@ const styles = StyleSheet.create({
 
   // CTA
   ctaContainer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: '#FAFBF8', paddingHorizontal: 20, paddingVertical: 16,
+    backgroundColor: '#FAFBF8', paddingHorizontal: 20, paddingTop: 16,
     borderTopWidth: 1, borderTopColor: '#DCE3D8',
     shadowColor: 'rgba(0,0,0,0.08)',
     shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.8,

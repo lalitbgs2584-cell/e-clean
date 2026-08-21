@@ -33,6 +33,7 @@ import { updateReportReview } from "@/services/reportService";
 
 import { StepProgressBar } from "@/components/report/StepProgressBar";
 import { MapPlaceholder } from "@/components/report/MapPlaceholder";
+import { ContentWithBottomBar } from "@/components/layout/ContentWithBottomBar";
 import { AiBadge } from "@/components/report/AiBadge";
 import { DuplicateReportCard } from "@/components/report/DuplicateReportCard";
 import { EditFieldModal } from "@/components/report/EditFieldModal";
@@ -496,27 +497,44 @@ export default function ReportSubmissionScreen() {
     const reportId = submittedReportId || "#ECLN-26-08-18-0007";
 
     return (
-      <SafeAreaView
-        style={styles.safeArea}
-        edges={["top", "left", "right", "bottom"]}
-      >
-        <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
-        <ScrollView
-          contentContainerStyle={styles.successScroll}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Green Animated Checkmark Badge */}
-          <View style={styles.successIllustrationWrap}>
-            <View style={styles.successLeafLeft}>
-              <Text style={{ fontSize: 24 }}>🌿</Text>
-            </View>
-            <View style={styles.successBadge}>
-              <Text style={styles.successCheckIcon}>✓</Text>
-            </View>
-            <View style={styles.successLeafRight}>
-              <Text style={{ fontSize: 24 }}>🌱</Text>
-            </View>
+      <ContentWithBottomBar
+        contentContainerStyle={styles.successScroll}
+        footer={
+          <View style={styles.successFooter}>
+            <Pressable
+              style={styles.primaryBtn}
+              onPress={() => router.replace("/(tabs)/my-reports")}
+            >
+              <Text style={styles.primaryBtnText}>View My Reports →</Text>
+            </Pressable>
+            <Pressable
+              style={styles.secondaryGhostBtn}
+              onPress={() => {
+                resetDraft();
+                setOriginalImage(null);
+                setSupportImage(null);
+              }}
+            >
+              <Text style={styles.secondaryGhostText}>
+                Submit Another Report
+              </Text>
+            </Pressable>
           </View>
+        }
+        items={<StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />}
+      >
+        {/* Green Animated Checkmark Badge */}
+        <View style={styles.successIllustrationWrap}>
+          <View style={styles.successLeafLeft}>
+            <Text style={{ fontSize: 24 }}>🌿</Text>
+          </View>
+          <View style={styles.successBadge}>
+            <Text style={styles.successCheckIcon}>✓</Text>
+          </View>
+          <View style={styles.successLeafRight}>
+            <Text style={{ fontSize: 24 }}>🌱</Text>
+          </View>
+        </View>
 
           <Text style={styles.successTitle}>Report Submitted!</Text>
           <Text style={styles.successSubtitle}>
@@ -571,28 +589,7 @@ export default function ReportSubmissionScreen() {
               </Text>
             </View>
           </View>
-        </ScrollView>
-
-        {/* Footer CTAs */}
-        <View style={styles.successFooter}>
-          <Pressable
-            style={styles.primaryBtn}
-            onPress={() => router.replace("/(tabs)/my-reports")}
-          >
-            <Text style={styles.primaryBtnText}>View My Reports →</Text>
-          </Pressable>
-          <Pressable
-            style={styles.secondaryGhostBtn}
-            onPress={() => {
-              resetDraft();
-              setOriginalImage(null);
-              setSupportImage(null);
-            }}
-          >
-            <Text style={styles.secondaryGhostText}>Submit Another Report</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      </ContentWithBottomBar>
     );
   }
 
@@ -600,46 +597,241 @@ export default function ReportSubmissionScreen() {
   // MAIN MULTI-STEP REPORT FLOW (STEPS 1 - 4)
   // New order: 1 Location -> 2 Duplicate -> 3 Photos -> 4 Review
   // ----------------------------------------------------
-  return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={["top", "left", "right", "bottom"]}
-    >
+
+  const bottomActionBar = (
+    <View style={styles.bottomBar}>
+      {step === 1 && (
+        <Pressable
+          style={[
+            styles.primaryBtn,
+            (isLocationLoading || isSubmitting) && styles.primaryBtnDisabled,
+          ]}
+          onPress={() => handleFindNearByReports()}
+          disabled={isLocationLoading || isSubmitting}
+        >
+          {isSubmitting ? (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <ActivityIndicator color="#FCFEFA" size="small" />
+              <Text style={styles.primaryBtnText}>
+                Scanning nearby reports...
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.primaryBtnText}>Check Nearby Reports →</Text>
+          )}
+        </Pressable>
+      )}
+
+      {step === 2 &&
+        (() => {
+          const isDuplicateFound = Boolean(
+            nearbyApiResponse?.hasNearbyReport &&
+              (nearbyApiResponse.closestReport ||
+                nearbyApiResponse.reports?.length > 0),
+          );
+
+          return (
+            <>
+              {(!isDuplicateFound ||
+                draft.duplicateChoice === "different_issue") && (
+                <Pressable
+                  style={styles.primaryBtn}
+                  onPress={moveToPhotoStep}
+                >
+                  <Text style={styles.primaryBtnText}>
+                    Continue to Photos →
+                  </Text>
+                </Pressable>
+              )}
+              {isDuplicateFound && draft.duplicateChoice === "none" && (
+                <Pressable
+                  style={[styles.primaryBtn, styles.primaryBtnDisabled]}
+                  disabled
+                >
+                  <Text style={styles.primaryBtnText}>
+                    Please select an option above
+                  </Text>
+                </Pressable>
+              )}
+            </>
+          );
+        })()}
+
+      {step === 3 && (
+        <Pressable
+          style={[
+            styles.primaryBtn,
+            (draft.photos.length === 0 || isSubmitting) &&
+              styles.primaryBtnDisabled,
+          ]}
+          onPress={() => handleResponseFromAI()}
+          disabled={draft.photos.length === 0 || isSubmitting}
+        >
+          {isSubmitting ? (
+            <View
+              style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
+            >
+              <ActivityIndicator color="#FCFEFA" size="small" />
+              <Text style={styles.primaryBtnText}>Analyzing with AI...</Text>
+            </View>
+          ) : (
+            <Text style={styles.primaryBtnText}>
+              Send for AI Assessment →
+            </Text>
+          )}
+        </Pressable>
+      )}
+
+      {step === 4 && (
+        <Pressable
+          style={[
+            styles.primaryBtn,
+            isSubmitting && styles.primaryBtnDisabled,
+          ]}
+          onPress={handleSubmitReport}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#FCFEFA" />
+          ) : (
+            <Text style={styles.primaryBtnText}>Submit Report ✓</Text>
+          )}
+        </Pressable>
+      )}
+    </View>
+  );
+
+  const overlays = (
+    <>
       <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
 
-      {/* Top Navigation Bar */}
-      <View style={styles.topNavRow}>
-        <Pressable
-          style={styles.backIconButton}
-          onPress={() => {
-            if (step > 1) {
-              prevStep();
-            } else {
-              router.back();
-            }
-          }}
-        >
-          <Text style={styles.backIconText}>←</Text>
-        </Pressable>
-        <Text style={styles.topNavBrand}>e-Clean Report</Text>
-        <View style={{ width: 38 }} />
-      </View>
-
-      {/* Progress Indicator */}
-      <StepProgressBar currentStep={step as 1 | 2 | 3 | 4} />
-
-      {/* Header Info */}
-      <View style={styles.stepHeaderBox}>
-        <Text style={styles.stepTitle}>{headerInfo.title}</Text>
-        <Text style={styles.stepSubtitle}>{headerInfo.subtitle}</Text>
-      </View>
-
-      {/* Scrollable Step Content */}
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      {/* ======================================================== */}
+      {/* FULLSCREEN CAMERA MODAL */}
+      {/* ======================================================== */}
+      <Modal
+        visible={isCameraModalOpen}
+        animationType="slide"
+        onRequestClose={() => setIsCameraModalOpen(false)}
       >
+        <View style={styles.cameraModalContainer}>
+          <CameraView
+            ref={cameraRef}
+            style={StyleSheet.absoluteFill}
+            facing={cameraFacing}
+            flash={cameraFlash}
+            mirror={cameraFacing === "front"}
+          />
+
+          <LinearGradient
+            colors={["rgba(0,0,0,0.65)", "transparent"]}
+            style={styles.cameraTopGradient}
+            pointerEvents="none"
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.85)"]}
+            style={styles.cameraBottomGradient}
+            pointerEvents="none"
+          />
+
+          {/* Camera Header */}
+          <SafeAreaView style={styles.cameraHeader} edges={["top"]}>
+            <Pressable
+              style={styles.cameraIconBtn}
+              onPress={() => setIsCameraModalOpen(false)}
+            >
+              <Text style={styles.cameraIconText}>✕</Text>
+            </Pressable>
+            <Text style={styles.cameraTitle}>Capture Waste Issue</Text>
+            <Pressable
+              style={styles.cameraIconBtn}
+              onPress={() =>
+                setCameraFlash((f) => (f === "off" ? "on" : "off"))
+              }
+            >
+              <Text style={styles.cameraIconText}>
+                {cameraFlash === "on" ? "⚡" : "🌩️"}
+              </Text>
+            </Pressable>
+          </SafeAreaView>
+
+          {/* Center Target Frame */}
+          <View style={styles.cameraGuideFrame} pointerEvents="none">
+            <View style={[styles.cornerBox, styles.cTL]} />
+            <View style={[styles.cornerBox, styles.cTR]} />
+            <View style={[styles.cornerBox, styles.cBL]} />
+            <View style={[styles.cornerBox, styles.cBR]} />
+          </View>
+
+          {/* Camera Shutter Controls */}
+          <SafeAreaView style={styles.cameraFooter} edges={["bottom"]}>
+            <View style={styles.cameraControlsRow}>
+              <View style={{ width: 48 }} />
+              <Pressable
+                style={styles.cameraShutterOuter}
+                onPress={handleCapturePhoto}
+                disabled={cameraCapturing}
+              >
+                <View
+                  style={[
+                    styles.cameraShutterInner,
+                    cameraCapturing && styles.cameraShutterCapturing,
+                  ]}
+                />
+              </Pressable>
+              <Pressable
+                style={styles.cameraFlipBtn}
+                onPress={() => {
+                  Haptics.selectionAsync().catch(() => {});
+                  setCameraFacing((f) => (f === "back" ? "front" : "back"));
+                }}
+              >
+                <Text style={{ fontSize: 20 }}>🔄</Text>
+              </Pressable>
+            </View>
+          </SafeAreaView>
+        </View>
+      </Modal>
+    </>
+  );
+
+  return (
+    <ContentWithBottomBar
+      header={
+        <>
+          {/* Top Navigation Bar */}
+          <View style={styles.topNavRow}>
+            <Pressable
+              style={styles.backIconButton}
+              onPress={() => {
+                if (step > 1) {
+                  prevStep();
+                } else {
+                  router.back();
+                }
+              }}
+            >
+              <Text style={styles.backIconText}>←</Text>
+            </Pressable>
+            <Text style={styles.topNavBrand}>e-Clean Report</Text>
+            <View style={{ width: 38 }} />
+          </View>
+
+          {/* Progress Indicator */}
+          <StepProgressBar currentStep={step as 1 | 2 | 3 | 4} />
+
+          {/* Header Info */}
+          <View style={styles.stepHeaderBox}>
+            <Text style={styles.stepTitle}>{headerInfo.title}</Text>
+            <Text style={styles.stepSubtitle}>{headerInfo.subtitle}</Text>
+          </View>
+        </>
+      }
+      contentContainerStyle={styles.scrollContent}
+      footer={bottomActionBar}
+      items={overlays}
+    >
         {/* ======================================================== */}
         {/* STEP 1: LOCATION */}
         {/* ======================================================== */}
@@ -1173,201 +1365,7 @@ export default function ReportSubmissionScreen() {
             />
           </View>
         )}
-      </ScrollView>
-
-      {/* ======================================================== */}
-      {/* BOTTOM ACTION BAR */}
-      {/* ======================================================== */}
-      <View style={styles.bottomBar}>
-        {step === 1 && (
-          <Pressable
-            style={[
-              styles.primaryBtn,
-              (isLocationLoading || isSubmitting) && styles.primaryBtnDisabled,
-            ]}
-            onPress={() => handleFindNearByReports()}
-            disabled={isLocationLoading || isSubmitting}
-          >
-            {isSubmitting ? (
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <ActivityIndicator color="#FCFEFA" size="small" />
-                <Text style={styles.primaryBtnText}>
-                  Scanning nearby reports...
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.primaryBtnText}>Check Nearby Reports →</Text>
-            )}
-          </Pressable>
-        )}
-
-        {step === 2 &&
-          (() => {
-            const isDuplicateFound = Boolean(
-              nearbyApiResponse?.hasNearbyReport &&
-              (nearbyApiResponse.closestReport ||
-                nearbyApiResponse.reports?.length > 0),
-            );
-
-            return (
-              <>
-                {(!isDuplicateFound ||
-                  draft.duplicateChoice === "different_issue") && (
-                  <Pressable
-                    style={styles.primaryBtn}
-                    onPress={moveToPhotoStep}
-                  >
-                    <Text style={styles.primaryBtnText}>
-                      Continue to Photos →
-                    </Text>
-                  </Pressable>
-                )}
-                {isDuplicateFound && draft.duplicateChoice === "none" && (
-                  <Pressable
-                    style={[styles.primaryBtn, styles.primaryBtnDisabled]}
-                    disabled
-                  >
-                    <Text style={styles.primaryBtnText}>
-                      Please select an option above
-                    </Text>
-                  </Pressable>
-                )}
-              </>
-            );
-          })()}
-
-        {step === 3 && (
-          <Pressable
-            style={[
-              styles.primaryBtn,
-              (draft.photos.length === 0 || isSubmitting) &&
-                styles.primaryBtnDisabled,
-            ]}
-            onPress={() => handleResponseFromAI()}
-            disabled={draft.photos.length === 0 || isSubmitting}
-          >
-            {isSubmitting ? (
-              <View
-                style={{ flexDirection: "row", alignItems: "center", gap: 8 }}
-              >
-                <ActivityIndicator color="#FCFEFA" size="small" />
-                <Text style={styles.primaryBtnText}>Analyzing with AI...</Text>
-              </View>
-            ) : (
-              <Text style={styles.primaryBtnText}>
-                Send for AI Assessment →
-              </Text>
-            )}
-          </Pressable>
-        )}
-
-        {step === 4 && (
-          <Pressable
-            style={[
-              styles.primaryBtn,
-              isSubmitting && styles.primaryBtnDisabled,
-            ]}
-            onPress={handleSubmitReport}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color="#FCFEFA" />
-            ) : (
-              <Text style={styles.primaryBtnText}>Submit Report ✓</Text>
-            )}
-          </Pressable>
-        )}
-      </View>
-
-      {/* ======================================================== */}
-      {/* FULLSCREEN CAMERA MODAL */}
-      {/* ======================================================== */}
-      <Modal
-        visible={isCameraModalOpen}
-        animationType="slide"
-        onRequestClose={() => setIsCameraModalOpen(false)}
-      >
-        <View style={styles.cameraModalContainer}>
-          <CameraView
-            ref={cameraRef}
-            style={StyleSheet.absoluteFill}
-            facing={cameraFacing}
-            flash={cameraFlash}
-            mirror={cameraFacing === "front"}
-          />
-
-          <LinearGradient
-            colors={["rgba(0,0,0,0.65)", "transparent"]}
-            style={styles.cameraTopGradient}
-            pointerEvents="none"
-          />
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.85)"]}
-            style={styles.cameraBottomGradient}
-            pointerEvents="none"
-          />
-
-          {/* Camera Header */}
-          <SafeAreaView style={styles.cameraHeader} edges={["top"]}>
-            <Pressable
-              style={styles.cameraIconBtn}
-              onPress={() => setIsCameraModalOpen(false)}
-            >
-              <Text style={styles.cameraIconText}>✕</Text>
-            </Pressable>
-            <Text style={styles.cameraTitle}>Capture Waste Issue</Text>
-            <Pressable
-              style={styles.cameraIconBtn}
-              onPress={() =>
-                setCameraFlash((f) => (f === "off" ? "on" : "off"))
-              }
-            >
-              <Text style={styles.cameraIconText}>
-                {cameraFlash === "on" ? "⚡" : "🌩️"}
-              </Text>
-            </Pressable>
-          </SafeAreaView>
-
-          {/* Center Target Frame */}
-          <View style={styles.cameraGuideFrame} pointerEvents="none">
-            <View style={[styles.cornerBox, styles.cTL]} />
-            <View style={[styles.cornerBox, styles.cTR]} />
-            <View style={[styles.cornerBox, styles.cBL]} />
-            <View style={[styles.cornerBox, styles.cBR]} />
-          </View>
-
-          {/* Camera Shutter Controls */}
-          <SafeAreaView style={styles.cameraFooter} edges={["bottom"]}>
-            <View style={styles.cameraControlsRow}>
-              <View style={{ width: 48 }} />
-              <Pressable
-                style={styles.cameraShutterOuter}
-                onPress={handleCapturePhoto}
-                disabled={cameraCapturing}
-              >
-                <View
-                  style={[
-                    styles.cameraShutterInner,
-                    cameraCapturing && styles.cameraShutterCapturing,
-                  ]}
-                />
-              </Pressable>
-              <Pressable
-                style={styles.cameraFlipBtn}
-                onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
-                  setCameraFacing((f) => (f === "back" ? "front" : "back"));
-                }}
-              >
-                <Text style={{ fontSize: 20 }}>🔄</Text>
-              </Pressable>
-            </View>
-          </SafeAreaView>
-        </View>
-      </Modal>
-    </SafeAreaView>
+    </ContentWithBottomBar>
   );
 }
 

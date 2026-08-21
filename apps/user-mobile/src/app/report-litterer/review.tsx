@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView, View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useLittererStore } from '@/store/litterer-store';
+import { ContentWithBottomBar } from '@/components/layout/ContentWithBottomBar';
 
 export default function ReviewScreen() {
   const router = useRouter();
@@ -11,29 +11,30 @@ export default function ReviewScreen() {
   const handleSubmit = () => {
     const newReport = createReport(draft);
     clearDraft();
-    // Navigate to submitted screen with report id
     router.replace({ pathname: '/report-litterer/submitted', params: { id: newReport.id } });
   };
 
   const handleEdit = () => {
-    router.back(); // go back to details screen for editing
+    router.back();
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Pressable onPress={handleEdit} style={styles.backBtn}>
-            <Text style={styles.backText}>←</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>Review Report</Text>
-          <View style={styles.headerPlaceholder} />
-        </View>
-
-        {/* Content */}
-        <View style={styles.content}>
+    <ContentWithBottomBar
+      scrollable={false}
+      header={
+        <>
+          <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
+          <View style={styles.headerRow}>
+            <Pressable onPress={handleEdit} style={styles.backBtn}>
+              <Text style={styles.backText}>←</Text>
+            </Pressable>
+            <Text style={styles.headerTitle}>Review Report</Text>
+            <View style={styles.headerPlaceholder} />
+          </View>
+        </>
+      }
+      body={
+        <ScrollView style={styles.flex} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.sectionTitle}>Report Type</Text>
           <Text style={styles.value}>{draft.type ?? '—'}</Text>
 
@@ -54,28 +55,27 @@ export default function ReviewScreen() {
 
           <Text style={styles.sectionTitle}>Clothing</Text>
           <Text style={styles.value}>{draft.clothing ?? '—'}</Text>
-        </View>
-
-        {/* Footer */}
+        </ScrollView>
+      }
+      footer={
         <View style={styles.footer}>
           <Pressable style={styles.submitBtn} onPress={handleSubmit}>
             <Text style={styles.submitBtnText}>Submit Report</Text>
           </Pressable>
         </View>
-      </View>
-    </SafeAreaView>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FAFBF8' },
-  container: { flex: 1, justifyContent: 'space-between' },
+  flex: { flex: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#DCE3D8' },
   backBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#E8F0E5', justifyContent: 'center', alignItems: 'center' },
   backText: { fontSize: 18, fontWeight: '800', color: '#2E7D4F' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#23302A', fontFamily: 'Sora' },
   headerPlaceholder: { width: 36 },
-  content: { flex: 1, padding: 24, gap: 12 },
+  content: { padding: 24, gap: 12 },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#6B7A70', fontFamily: 'Plus Jakarta Sans' },
   value: { fontSize: 15, color: '#23302A', fontFamily: 'Plus Jakarta Sans', marginBottom: 8 },
   footer: { padding: 20, backgroundColor: '#FAFBF8' },

@@ -394,8 +394,17 @@ function ReportDrawer({
         </header>
         <div
           className={`detail-image ${report.attention === "URGENT" ? "orange" : report.status === "DISPUTED" ? "teal" : "green"}`}
+          style={{ padding: report.images.some(i => i.type === "REPORT") ? 0 : undefined, overflow: "hidden" }}
         >
-          Citizen report image · GPS verified
+          {report.images.find((img) => img.type === "REPORT")?.url ? (
+            <img
+              src={report.images.find((img) => img.type === "REPORT")!.url!}
+              alt="Citizen report image"
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            />
+          ) : (
+            "Citizen report image · GPS verified"
+          )}
         </div>
         <section>
           <div className="detail-heading">
@@ -449,8 +458,11 @@ function ReportDrawer({
           <h3>Evidence</h3>
           <div className="evidence-grid">
             <div className="evidence-shot before">
-              Before
-              <br />
+              {report.images[0]?.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={report.images[0].url} alt="Reported waste" loading="lazy" />
+              ) : null}
+              <span className="evidence-label">Before</span>
               <small>
                 {report.images[0]
                   ? formatCompactDate(report.images[0].createdAt)
@@ -458,8 +470,11 @@ function ReportDrawer({
               </small>
             </div>
             <div className="evidence-shot after">
-              After
-              <br />
+              {report.cleanup?.afterImage?.url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={report.cleanup.afterImage.url} alt="After cleanup" loading="lazy" />
+              ) : null}
+              <span className="evidence-label">After</span>
               <small>
                 {report.cleanup?.afterImage
                   ? formatCompactDate(report.cleanup.afterImage.createdAt)

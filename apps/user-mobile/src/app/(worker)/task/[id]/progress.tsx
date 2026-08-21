@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable,
+  View, Text, StyleSheet, Pressable,
   StatusBar, Image, Alert, ActivityIndicator,
   Modal, TextInput, Linking,
 } from 'react-native';
@@ -17,6 +17,7 @@ import {
   uploadToPresignedUrl,
   type WorkerCleanup,
 } from '@/services/workerService';
+import { ContentWithBottomBar } from '@/components/layout/ContentWithBottomBar';
 
 // ---- worker camera modal ----------------------------------------------------
 
@@ -201,9 +202,15 @@ export default function TaskProgressScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}><ActivityIndicator color="#2E7D4F" size="large" /></View>
-      </SafeAreaView>
+      <ContentWithBottomBar
+        scrollable={false}
+        contentContainerStyle={{ flex: 1 }}
+        body={
+          <View style={styles.centered}>
+            <ActivityIndicator color="#2E7D4F" size="large" />
+          </View>
+        }
+      />
     );
   }
 
@@ -211,138 +218,138 @@ export default function TaskProgressScreen() {
   const report = cleanup?.report;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
+    <ContentWithBottomBar
+      contentContainerStyle={styles.scroll}
+      footer={
+        <View style={styles.ctaContainer}>
+          <Pressable
+            style={[styles.completeBtn, (!canComplete || completing) && styles.completeBtnDisabled]}
+            onPress={handleComplete}
+            disabled={!canComplete || completing}>
+            {completing
+              ? <ActivityIndicator color="#FCFEFA" />
+              : <Text style={styles.completeBtnText}>✓  Mark as Completed</Text>
+            }
+          </Pressable>
+        </View>
+      }
+      items={
+        <>
+          <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
+          {cameraSlot && (
+            <WorkerCameraModal
+              visible
+              slot={cameraSlot}
+              onCapture={handleCaptured}
+              onClose={() => setCameraSlot(null)}
+            />
+          )}
+        </>
+      }
+    >
+      {/* Nav */}
+      <View style={styles.navRow}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+          <Text style={styles.backBtnText}>← Back</Text>
+        </Pressable>
+        <View style={styles.inProgressBadge}>
+          <Text style={styles.inProgressText}>IN PROGRESS</Text>
+        </View>
+      </View>
 
-      {cameraSlot && (
-        <WorkerCameraModal
-          visible
-          slot={cameraSlot}
-          onCapture={handleCaptured}
-          onClose={() => setCameraSlot(null)}
-        />
+      <Text style={styles.screenTitle}>Task In Progress</Text>
+      {cleanup && (
+        <Text style={styles.taskId}>{cleanup.id.slice(0, 18).toUpperCase()}</Text>
       )}
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* Nav */}
-        <View style={styles.navRow}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backBtnText}>← Back</Text>
-          </Pressable>
-          <View style={styles.inProgressBadge}>
-            <Text style={styles.inProgressText}>IN PROGRESS</Text>
-          </View>
-        </View>
-
-        <Text style={styles.screenTitle}>Task In Progress</Text>
-        {cleanup && (
-          <Text style={styles.taskId}>{cleanup.id.slice(0, 18).toUpperCase()}</Text>
-        )}
-
-        {/* Location + map */}
-        <Text style={styles.sectionHeader}>Location</Text>
-        {report && (
-          <MapPlaceholder
-            latitude={report.latitude}
-            longitude={report.longitude}
-            height={200}
-          />
-        )}
-        <Pressable style={styles.mapsBtn} onPress={openMaps}>
-          <Text style={styles.mapsBtnText}>🗺  Open in Google Maps</Text>
-        </Pressable>
-
-        {/* Photo evidence */}
-        <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Photo Evidence</Text>
-        <Text style={styles.photoSubtitle}>Both photos are required to complete the task.</Text>
-
-        <View style={styles.photoRow}>
-          {/* Before */}
-          <View style={styles.photoSlot}>
-            <Text style={styles.photoSlotLabel}>Before Cleaning</Text>
-            {uploading === 'before' ? (
-              <View style={styles.photoBox}>
-                <ActivityIndicator color="#2E7D4F" />
-                <Text style={styles.uploadingText}>Uploading…</Text>
-              </View>
-            ) : beforeUri ? (
-              <Pressable
-                style={styles.photoBox}
-                onPress={() => setCameraSlot('before')}>
-                <Image source={{ uri: beforeUri }} style={styles.photoThumb} />
-                {beforeKey && <View style={styles.uploadedTick}><Text style={styles.uploadedTickText}>✓</Text></View>}
-              </Pressable>
-            ) : (
-              <Pressable
-                style={[styles.photoBox, styles.photoBoxEmpty]}
-                onPress={() => setCameraSlot('before')}>
-                <Text style={styles.cameraIcon}>📷</Text>
-                <Text style={styles.tapText}>Tap to capture</Text>
-              </Pressable>
-            )}
-          </View>
-
-          {/* After */}
-          <View style={styles.photoSlot}>
-            <Text style={styles.photoSlotLabel}>After Cleaning</Text>
-            {uploading === 'after' ? (
-              <View style={styles.photoBox}>
-                <ActivityIndicator color="#2E7D4F" />
-                <Text style={styles.uploadingText}>Uploading…</Text>
-              </View>
-            ) : afterUri ? (
-              <Pressable
-                style={styles.photoBox}
-                onPress={() => setCameraSlot('after')}>
-                <Image source={{ uri: afterUri }} style={styles.photoThumb} />
-                {afterKey && <View style={styles.uploadedTick}><Text style={styles.uploadedTickText}>✓</Text></View>}
-              </Pressable>
-            ) : (
-              <Pressable
-                style={[styles.photoBox, styles.photoBoxEmpty, !beforeKey && { opacity: 0.5 }]}
-                onPress={() => beforeKey && setCameraSlot('after')}>
-                <Text style={styles.cameraIcon}>📷</Text>
-                <Text style={styles.tapText}>Tap to capture</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
-
-        {!beforeKey && (
-          <Text style={styles.hintText}>Take the Before photo first.</Text>
-        )}
-        {beforeKey && !afterKey && (
-          <Text style={styles.hintText}>Now take the After photo.</Text>
-        )}
-
-        {/* Notes */}
-        <Text style={[styles.sectionHeader, { marginTop: 20 }]}>Notes (Optional)</Text>
-        <TextInput
-          style={styles.notesInput}
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Add any notes about the cleanup…"
-          placeholderTextColor="#6B7A70"
-          multiline
-          numberOfLines={3}
+      {/* Location + map */}
+      <Text style={styles.sectionHeader}>Location</Text>
+      {report && (
+        <MapPlaceholder
+          latitude={report.latitude}
+          longitude={report.longitude}
+          height={200}
         />
+      )}
+      <Pressable style={styles.mapsBtn} onPress={openMaps}>
+        <Text style={styles.mapsBtnText}>🗺  Open in Google Maps</Text>
+      </Pressable>
 
-      </ScrollView>
+      {/* Photo evidence */}
+      <Text style={[styles.sectionHeader, { marginTop: 24 }]}>Photo Evidence</Text>
+      <Text style={styles.photoSubtitle}>Both photos are required to complete the task.</Text>
 
-      {/* CTA */}
-      <View style={styles.ctaContainer}>
-        <Pressable
-          style={[styles.completeBtn, (!canComplete || completing) && styles.completeBtnDisabled]}
-          onPress={handleComplete}
-          disabled={!canComplete || completing}>
-          {completing
-            ? <ActivityIndicator color="#FCFEFA" />
-            : <Text style={styles.completeBtnText}>✓  Mark as Completed</Text>
-          }
-        </Pressable>
+      <View style={styles.photoRow}>
+        {/* Before */}
+        <View style={styles.photoSlot}>
+          <Text style={styles.photoSlotLabel}>Before Cleaning</Text>
+          {uploading === 'before' ? (
+            <View style={styles.photoBox}>
+              <ActivityIndicator color="#2E7D4F" />
+              <Text style={styles.uploadingText}>Uploading…</Text>
+            </View>
+          ) : beforeUri ? (
+            <Pressable
+              style={styles.photoBox}
+              onPress={() => setCameraSlot('before')}>
+              <Image source={{ uri: beforeUri }} style={styles.photoThumb} />
+              {beforeKey && <View style={styles.uploadedTick}><Text style={styles.uploadedTickText}>✓</Text></View>}
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[styles.photoBox, styles.photoBoxEmpty]}
+              onPress={() => setCameraSlot('before')}>
+              <Text style={styles.cameraIcon}>📷</Text>
+              <Text style={styles.tapText}>Tap to capture</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* After */}
+        <View style={styles.photoSlot}>
+          <Text style={styles.photoSlotLabel}>After Cleaning</Text>
+          {uploading === 'after' ? (
+            <View style={styles.photoBox}>
+              <ActivityIndicator color="#2E7D4F" />
+              <Text style={styles.uploadingText}>Uploading…</Text>
+            </View>
+          ) : afterUri ? (
+            <Pressable
+              style={styles.photoBox}
+              onPress={() => setCameraSlot('after')}>
+              <Image source={{ uri: afterUri }} style={styles.photoThumb} />
+              {afterKey && <View style={styles.uploadedTick}><Text style={styles.uploadedTickText}>✓</Text></View>}
+            </Pressable>
+          ) : (
+            <Pressable
+              style={[styles.photoBox, styles.photoBoxEmpty, !beforeKey && { opacity: 0.5 }]}
+              onPress={() => beforeKey && setCameraSlot('after')}>
+              <Text style={styles.cameraIcon}>📷</Text>
+              <Text style={styles.tapText}>Tap to capture</Text>
+            </Pressable>
+          )}
+        </View>
       </View>
-    </SafeAreaView>
+
+      {!beforeKey && (
+        <Text style={styles.hintText}>Take the Before photo first.</Text>
+      )}
+      {beforeKey && !afterKey && (
+        <Text style={styles.hintText}>Now take the After photo.</Text>
+      )}
+
+      {/* Notes */}
+      <Text style={[styles.sectionHeader, { marginTop: 20 }]}>Notes (Optional)</Text>
+      <TextInput
+        style={styles.notesInput}
+        value={notes}
+        onChangeText={setNotes}
+        placeholder="Add any notes about the cleanup…"
+        placeholderTextColor="#6B7A70"
+        multiline
+        numberOfLines={3}
+      />
+    </ContentWithBottomBar>
   );
 }
 
@@ -350,7 +357,8 @@ export default function TaskProgressScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FAFBF8' },
-  scroll: { padding: 20, paddingBottom: 120 },
+  scrollView: { flex: 1 },
+  scroll: { padding: 20 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   navRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
@@ -411,8 +419,7 @@ const styles = StyleSheet.create({
   },
 
   ctaContainer: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: '#FAFBF8', paddingHorizontal: 20, paddingVertical: 16,
+    backgroundColor: '#FAFBF8', paddingHorizontal: 20, paddingTop: 16,
     borderTopWidth: 1, borderTopColor: '#DCE3D8',
     shadowColor: 'rgba(0,0,0,0.1)',
     shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.8, shadowRadius: 12, elevation: 8,

@@ -73,17 +73,23 @@ export const updateCitizenReport = async (
   }
 
   const { id } = req.params;
-  const { isRecurring, wasteType, severity, description } = req.body as {
+  const { isRecurring, wasteType, severity, description, isLitterer } = req.body as {
     isRecurring?: boolean;
     wasteType?: string;
     severity?: string;
     description?: string;
+    isLitterer?: boolean;
   };
 
   if (isRecurring !== undefined && typeof isRecurring !== "boolean") {
     return res
       .status(400)
       .json({ success: false, error: "isRecurring must be a boolean" });
+  }
+  if (isLitterer !== undefined && typeof isLitterer !== "boolean") {
+    return res
+      .status(400)
+      .json({ success: false, error: "isLitterer must be a boolean" });
   }
   if (wasteType !== undefined && !WASTE_TYPE_TO_ENUM[wasteType]) {
     return res
@@ -106,6 +112,7 @@ export const updateCitizenReport = async (
       where: { id: id as string, userId },
       data: {
         ...(isRecurring !== undefined ? { isRecurring } : {}),
+        ...(isLitterer !== undefined ? { isLittererReport: isLitterer } : {}),
         ...(wasteType !== undefined
           ? { wasteCategory: WASTE_TYPE_TO_ENUM[wasteType] as never }
           : {}),
@@ -130,6 +137,64 @@ export const updateCitizenReport = async (
     return res
       .status(500)
       .json({ success: false, error: "Failed to update report" });
+  }
+};
+
+export const verifyResolvedReport = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ success: false, error: "Unauthorized" });
+  }
+
+  const { id } = req.params;
+  const { result, comment } = req.body as {
+    result?: "VERIFIED" | "DISPUTED";
+    comment?: string;
+  };
+  if (result !== "VERIFIED" && result !== "DISPUTED") {
+    return res.status(400).json({ success: false, error: "result must be VERIFIED or DISPUTED" });
+  }
+  if (comment !== undefined && typeof comment !== "string") {
+    return res.status(400).json({ success: false, error: "comment must be text" });
+  }
+
+  try {
+    const report = await prisma.report.findFirst({ where: { id: id as string, userId } });
+    if (!report) {
+      return res.status(404).json({ success: false, error: "Report not found" });
+    }
+    if (report.status !== "RESOLVED") {
+      return res.status(409).json({ success: false, error: "Only authority-resolved reports can be verified" });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.reportVerification.upsert({
+        where: { reportId: report.id },
+        create: { reportId: report.id, userId, result, comment: comment?.trim() || null },
+        update: { result, comment: comment?.trim() || null },
+      });
+      
+      if (result === "VERIFIED") {
+        await tx.user.update({
+          where: { id: report.userId },
+          data: { points: { increment: report.isLittererReport ? 50 : 10 } }
+        });
+      }
+
+      return tx.report.update({
+        where: { id: report.id },
+        data: { status: result === "VERIFIED" ? "VERIFIED" : "DISPUTED" },
+        include: { images: true, cleanup: { include: { beforeImage: true, afterImage: true } }, verification: true },
+      });
+    });
+
+    return res.json({ success: true, data: updated });
+  } catch (error) {
+    console.error("verifyResolvedReport error:", error);
+    return res.status(500).json({ success: false, error: "Failed to save verification" });
   }
 };
 

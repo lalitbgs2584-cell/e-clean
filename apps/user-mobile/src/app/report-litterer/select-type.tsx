@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useLittererStore } from '@/store/litterer-store';
+import { ContentWithBottomBar } from '@/components/layout/ContentWithBottomBar';
 
 export default function SelectTypeScreen() {
   const router = useRouter();
@@ -23,19 +23,21 @@ export default function SelectTypeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <Text style={styles.backText}>←</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>Report a Litterer</Text>
-          <View style={styles.headerPlaceholder} />
-        </View>
-
-        {/* Content */}
+    <ContentWithBottomBar
+      scrollable={false}
+      header={
+        <>
+          <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
+          <View style={styles.headerRow}>
+            <Pressable onPress={() => router.back()} style={styles.backBtn}>
+              <Text style={styles.backText}>←</Text>
+            </Pressable>
+            <Text style={styles.headerTitle}>Report a Litterer</Text>
+            <View style={styles.headerPlaceholder} />
+          </View>
+        </>
+      }
+      body={
         <View style={styles.content}>
           <Text style={styles.title}>Report a Litterer</Text>
           <Text style={styles.subtitle}>What would you like to report?</Text>
@@ -97,8 +99,8 @@ export default function SelectTypeScreen() {
             </View>
           </View>
         </View>
-
-        {/* Footer Button */}
+      }
+      footer={
         <View style={styles.footer}>
           <Pressable
             style={[styles.continueBtn, !selected && styles.continueBtnDisabled]}
@@ -107,20 +109,12 @@ export default function SelectTypeScreen() {
             <Text style={styles.continueBtnText}>Continue</Text>
           </Pressable>
         </View>
-      </View>
-    </SafeAreaView>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FAFBF8',
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',

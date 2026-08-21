@@ -1,8 +1,19 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Text, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path, Circle } from 'react-native-svg';
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
+  return (
+    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+      <Ionicons name={name} size={22} color={focused ? '#2E7D4F' : '#8B9A92'} />
+    </View>
+  );
+}
 
 function CameraTabIcon() {
   return (
@@ -35,35 +46,41 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            height: 60 + bottomInset,
-            paddingBottom: bottomInset,
-          },
-        ],
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#DCE3D8',
+          height: 60 + bottomInset,
+          paddingBottom: bottomInset,
+          paddingTop: 10,
+        },
         tabBarActiveTintColor: '#2E7D4F',
-        tabBarInactiveTintColor: '#6B7A70',
+        tabBarInactiveTintColor: '#8B9A92',
         tabBarLabelStyle: styles.tabLabel,
+        tabBarItemStyle: styles.tabItem,
       }}>
       <Tabs.Screen
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>🏠</Text>,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="my-reports"
         options={{
           title: 'Reports',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>📋</Text>,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'document-text' : 'document-text-outline'} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="camera"
         options={{
-          title: 'Report',
+          title: '',
           tabBarIcon: () => (
             <View style={styles.centerFab}>
               <CameraTabIcon />
@@ -75,14 +92,18 @@ export default function TabsLayout() {
         name="alerts"
         options={{
           title: 'Alerts',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>🔔</Text>,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'notifications' : 'notifications-outline'} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 18 }}>👤</Text>,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} />
+          ),
         }}
       />
     </Tabs>
@@ -90,18 +111,24 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#DCE3D8',
-    height: 64,
-    paddingBottom: 8,
-    paddingTop: 8,
+  tabItem: {
+    paddingTop: 2,
+  },
+  iconWrap: {
+    width: 40,
+    height: 30,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapActive: {
+    backgroundColor: '#E8F5E9',
   },
   tabLabel: {
     fontSize: 11,
     fontWeight: '700',
     fontFamily: 'Plus Jakarta Sans',
+    marginTop: 2,
   },
   centerFab: {
     width: 48,

@@ -41,7 +41,7 @@ export async function POST(
   );
   if (error) return error;
 
-  const key = profileImageKey(worker.id, generateUploadId());
+  const key = profileImageKey(worker.id, generateUploadId(), body.mime);
   const url = await presignProfileImagePut(key, body.mime);
 
   return NextResponse.json({ success: true, url, key });

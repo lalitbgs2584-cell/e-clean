@@ -97,6 +97,8 @@ enum ReportImageType {
 
 enum CleanupStatus {
   ASSIGNED
+  ACCEPTED
+  REJECTED
   IN_PROGRESS
   COMPLETED
   CANCELLED
@@ -145,6 +147,7 @@ model User {
   // ---- role & access ----
   role     Role    @default(CITIZEN)
   isActive Boolean @default(true) // authority can deactivate a worker/staff account
+  points   Int     @default(0)    // lifetime points for citizen reports
 
   // ---- jurisdiction ----
   // Only meaningful for WORKER / AUTHORITY. Used to route/filter reports by
@@ -250,8 +253,9 @@ model Report {
   userId String
 
   // ---- citizen input only ----
-  description String?
-  isRecurring Boolean @default(false)
+  description      String?
+  isRecurring      Boolean @default(false)
+  isLittererReport Boolean @default(false)
 
   // ---- location ----
   // latitude/longitude are plain columns so Prisma can read/write them
@@ -414,9 +418,13 @@ model Cleanup {
   beforeImageId String? @unique
   afterImageId  String? @unique
 
-  assignedAt  DateTime  @default(now())
-  startedAt   DateTime?
-  completedAt DateTime?
+  assignedAt      DateTime  @default(now())
+  acceptedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  completionNotes String?
 
   report        Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
   worker        User   @relation("WorkerCleanups", fields: [workerId], references: [id])

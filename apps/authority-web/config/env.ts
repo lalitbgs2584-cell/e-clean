@@ -9,6 +9,5 @@ export const env = {
   s3Region: process.env.S3_REGION ?? "ap-south-1",
   s3AccessKeyId: process.env.S3_ACCESS_KEY_ID ?? "",
   s3SecretAccessKey: process.env.S3_SECRET_ACCESS_KEY ?? "",
-  cloudfrontProfileDomain:
-    process.env.NEXT_PUBLIC_CLOUDFRONT_PROFILE_DOMAIN ?? "",
+  cloudfrontDomain: process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN ?? "",
 };

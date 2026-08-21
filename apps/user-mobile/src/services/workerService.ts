@@ -10,7 +10,7 @@ const base = config.apiUrl;
 // Types
 // ---------------------------------------------------------------------------
 
-export type CleanupStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type CleanupStatus = "ASSIGNED" | "ACCEPTED" | "REJECTED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 
 export interface WorkerUser {
   id: string;
@@ -75,6 +75,9 @@ export interface WorkerCleanup {
   beforeImageId?: string | null;
   afterImageId?: string | null;
   assignedAt: string;
+  acceptedAt?: string | null;
+  rejectedAt?: string | null;
+  rejectionReason?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
   report: WorkerReport;
@@ -187,6 +190,18 @@ export const startCleanup = (id: string) =>
   apiFetch<{ success: boolean; data: WorkerCleanup }>(
     `/api/worker/cleanups/${id}/start`,
     { method: "PATCH" }
+  );
+
+export const acceptCleanup = (id: string) =>
+  apiFetch<{ success: boolean; data: WorkerCleanup }>(
+    `/api/worker/cleanups/${id}/accept`,
+    { method: "PATCH" }
+  );
+
+export const rejectCleanup = (id: string, reason: string) =>
+  apiFetch<{ success: boolean; data: WorkerCleanup }>(
+    `/api/worker/cleanups/${id}/reject`,
+    { method: "PATCH", body: JSON.stringify({ reason }) }
   );
 
 export const presignCleanupImage = (

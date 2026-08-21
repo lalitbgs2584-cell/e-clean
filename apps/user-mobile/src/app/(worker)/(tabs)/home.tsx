@@ -97,6 +97,7 @@ export default function WorkerHomeScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2E7D4F" />}>
@@ -116,7 +117,7 @@ export default function WorkerHomeScreen() {
           </View>
           <Pressable
             style={styles.avatarBtn}
-            onPress={() => router.push('./(worker)/(tabs)/profile')}>
+            onPress={() => router.push('/(worker)/(tabs)/profile')}>
             {avatarUrl ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatarImg} />
             ) : (
@@ -158,7 +159,7 @@ export default function WorkerHomeScreen() {
         ) : todayTask ? (
           <Pressable
             style={styles.todayCard}
-            onPress={() => router.push(`/(worker)/task/${todayTask.id}/index` as any)}>
+            onPress={() => router.push(`/(worker)/task/${todayTask.id}`)}>
             <View style={styles.todayCardTop}>
               <View style={styles.assignedBadge}>
                 <Text style={styles.assignedBadgeText}>ASSIGNED</Text>
@@ -203,7 +204,6 @@ export default function WorkerHomeScreen() {
                 </Text>
               </View>
             ) : null}
-
             <View style={styles.viewTaskBtn}>
               <Text style={styles.viewTaskBtnText}>View Task Details →</Text>
             </View>
@@ -260,6 +260,7 @@ export default function WorkerHomeScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FAFBF8' },
+  scrollView: { flex: 1 },
   scroll: { padding: 20, paddingBottom: 40 },
 
   // Header

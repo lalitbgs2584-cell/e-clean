@@ -1,12 +1,19 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Text, View, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-/**
- * Worker tab bar — mirrors the citizen tab bar styling exactly,
- * keeping the same design language (same colors, height, font).
- */
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+function TabIcon({ name, focused }: { name: IconName; focused: boolean }) {
+  return (
+    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+      <Ionicons name={name} size={22} color={focused ? '#2E7D4F' : '#8B9A92'} />
+    </View>
+  );
+}
+
 export default function WorkerTabsLayout() {
   const insets = useSafeAreaInsets();
   const bottomInset = Math.max(insets.bottom, 10);
@@ -15,43 +22,53 @@ export default function WorkerTabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            height: 60 + bottomInset,
-            paddingBottom: bottomInset,
-          },
-        ],
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#DCE3D8',
+          height: 60 + bottomInset,
+          paddingBottom: bottomInset,
+          paddingTop: 10,
+        },
         tabBarActiveTintColor: '#2E7D4F',
-        tabBarInactiveTintColor: '#6B7A70',
+        tabBarInactiveTintColor: '#8B9A92',
         tabBarLabelStyle: styles.tabLabel,
+        tabBarItemStyle: styles.tabItem,
       }}>
       <Tabs.Screen
         name="home"
         options={{
           title: 'Home',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>🏠</Text>,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'home' : 'home-outline'} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="tasks"
         options={{
           title: 'Tasks',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>✅</Text>,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'checkmark-circle' : 'checkmark-circle-outline'} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="history"
         options={{
           title: 'History',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>📋</Text>,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'time' : 'time-outline'} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: () => <Text style={{ fontSize: 18 }}>👤</Text>,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon name={focused ? 'person' : 'person-outline'} focused={focused} />
+          ),
         }}
       />
     </Tabs>
@@ -59,17 +76,23 @@ export default function WorkerTabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#DCE3D8',
-    height: 64,
-    paddingBottom: 8,
-    paddingTop: 8,
+  tabItem: {
+    paddingTop: 2,
+  },
+  iconWrap: {
+    width: 40,
+    height: 30,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapActive: {
+    backgroundColor: '#E8F5E9',
   },
   tabLabel: {
     fontSize: 11,
     fontWeight: '700',
     fontFamily: 'Plus Jakarta Sans',
+    marginTop: 2,
   },
 });

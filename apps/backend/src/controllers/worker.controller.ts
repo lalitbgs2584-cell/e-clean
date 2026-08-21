@@ -277,8 +277,82 @@ export const getWorkerCleanupById = async (
 };
 
 // ---------------------------------------------------------------------------
+// PATCH /api/worker/cleanups/:id/accept
+// Transition: ASSIGNED → ACCEPTED. Starting work remains a separate action.
+// ---------------------------------------------------------------------------
+export const acceptWorkerCleanup = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  try {
+    const id = req.params.id as string;
+    const workerId = req.user!.id;
+    const cleanup = await prisma.cleanup.findFirst({ where: { id, workerId } });
+
+    if (!cleanup) {
+      return res.status(404).json({ success: false, error: "Cleanup not found or not authorized" });
+    }
+    if (cleanup.status !== "ASSIGNED") {
+      return res.status(409).json({
+        success: false,
+        error: `Only assigned cleanups can be accepted. Current status: ${cleanup.status}`,
+      });
+    }
+
+    const updated = await prisma.cleanup.update({
+      where: { id },
+      data: { status: "ACCEPTED", acceptedAt: new Date(), rejectedAt: null, rejectionReason: null },
+      include: { report: true, assignedByRef: { select: { id: true, name: true } } },
+    });
+    return res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error("[worker/cleanups/:id/accept]", err);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// PATCH /api/worker/cleanups/:id/reject body: { reason }
+// ---------------------------------------------------------------------------
+export const rejectWorkerCleanup = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  try {
+    const id = req.params.id as string;
+    const workerId = req.user!.id;
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+    if (!reason) {
+      return res.status(400).json({ success: false, error: "A rejection reason is required" });
+    }
+
+    const cleanup = await prisma.cleanup.findFirst({ where: { id, workerId } });
+    if (!cleanup) {
+      return res.status(404).json({ success: false, error: "Cleanup not found or not authorized" });
+    }
+    if (cleanup.status !== "ASSIGNED") {
+      return res.status(409).json({ success: false, error: "Only pending assignments can be rejected" });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const rejected = await tx.cleanup.update({
+        where: { id },
+        data: { status: "REJECTED", rejectedAt: new Date(), rejectionReason: reason },
+        include: { report: true, assignedByRef: { select: { id: true, name: true } } },
+      });
+      await tx.report.update({ where: { id: cleanup.reportId }, data: { status: "AI_ASSESSED" } });
+      return rejected;
+    });
+    return res.json({ success: true, data: updated });
+  } catch (err) {
+    console.error("[worker/cleanups/:id/reject]", err);
+    return res.status(500).json({ success: false, error: "Server error" });
+  }
+};
+
+// ---------------------------------------------------------------------------
 // PATCH /api/worker/cleanups/:id/start
-// Transition: ASSIGNED → IN_PROGRESS
+// Transition: ACCEPTED → IN_PROGRESS
 // ---------------------------------------------------------------------------
 export const startWorkerCleanup = async (
   req: AuthenticatedRequest,
@@ -309,7 +383,7 @@ export const startWorkerCleanup = async (
         .json({ success: false, error: "Cancelled cleanup cannot be started" });
     }
 
-    if (cleanup.status !== "ASSIGNED") {
+    if (cleanup.status !== "ACCEPTED") {
       return res.status(409).json({
         success: false,
         error: `Cannot start a cleanup with status ${cleanup.status}`,
@@ -377,10 +451,10 @@ export const presignWorkerImage = async (
         .json({ success: false, error: "Cleanup not found or not authorized" });
     }
 
-    if (cleanup.status === "CANCELLED") {
+    if (!["ACCEPTED", "IN_PROGRESS"].includes(cleanup.status)) {
       return res
         .status(409)
-        .json({ success: false, error: "Cannot upload images for a cancelled cleanup" });
+        .json({ success: false, error: "Accept and start the cleanup before uploading evidence" });
     }
 
     const key = workerImageKey(id, slot);
@@ -433,6 +507,12 @@ export const completeWorkerCleanup = async (
         error: "beforeImageKey and afterImageKey are required",
       });
     }
+    if (
+      beforeImageKey !== workerImageKey(id, "before") ||
+      afterImageKey !== workerImageKey(id, "after")
+    ) {
+      return res.status(400).json({ success: false, error: "Cleanup evidence keys are invalid" });
+    }
 
     // Verify ownership and current status
     const cleanup = await prisma.cleanup.findFirst({
@@ -481,6 +561,7 @@ export const completeWorkerCleanup = async (
           data: {
             status: "COMPLETED",
             completedAt: new Date(),
+            completionNotes: _notes?.trim() || null,
             beforeImageId: before.id,
             afterImageId: after.id,
           },

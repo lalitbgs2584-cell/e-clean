@@ -1,4 +1,4 @@
-﻿export type ReportStatus =
+export type ReportStatus =
   | "PENDING"
   | "AI_ASSESSED"
   | "ASSIGNED"
@@ -11,16 +11,21 @@
 
 export type AttentionLevel = "NORMAL" | "URGENT";
 export type CleanupStatus =
-  "ASSIGNED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+  | "ASSIGNED"
+  | "ACCEPTED"
+  | "REJECTED"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
 export type VerificationResult = "VERIFIED" | "DISPUTED";
 export type ReportActionType =
   | "assign"
-  | "start_cleanup"
-  | "complete_cleanup"
   | "approve_cleanup"
+  | "link_duplicate"
   | "mark_verified"
   | "mark_disputed"
-  | "link_duplicate";
+  | "start_cleanup"
+  | "complete_cleanup";
 
 export type StatusStepState = "done" | "current" | "blocked" | "upcoming";
 
@@ -34,6 +39,8 @@ export type AuthorityMedia = {
   id: string;
   type: "REPORT" | "BEFORE_CLEANUP" | "AFTER_CLEANUP" | "COLLECTION_PROOF";
   storagePath: string;
+  /** CDN URL derived from storagePath (the single E-Clean distribution). */
+  url: string | null;
   mediaType: "PHOTO" | "VIDEO";
   createdAt: string;
 };
@@ -293,6 +300,8 @@ export function deriveCleanupState(report: AuthorityReport) {
   if (report.cleanup?.status === "COMPLETED")
     return "Waiting for citizen review";
   if (report.cleanup?.status === "IN_PROGRESS") return "Cleanup in progress";
+  if (report.cleanup?.status === "ACCEPTED") return "Worker accepted assignment";
+  if (report.cleanup?.status === "REJECTED") return "Worker declined assignment";
   if (report.cleanup?.status === "ASSIGNED") return "Worker assigned";
   return "Awaiting assignment";
 }
