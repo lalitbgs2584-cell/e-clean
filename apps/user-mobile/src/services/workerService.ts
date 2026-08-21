@@ -33,6 +33,14 @@ export interface WorkerUser {
   createdAt: string;
 }
 
+export interface DisputeStats {
+  recentTotal: number;
+  recentDisputed: number;
+  disputeRatePercent: number;
+  warning: boolean;
+  message: string | null;
+}
+
 export interface WorkerStats {
   assigned: number;
   inProgress: number;
@@ -40,7 +48,56 @@ export interface WorkerStats {
   cancelled: number;
   verified: number;
   disputed: number;
+  thisWeekCompleted?: number;
+  lastWeekCompleted?: number;
+  streakDays?: number;
+  disputeStats?: DisputeStats;
 }
+
+export type RejectionReasonCode =
+  | "LOCATION_INCORRECT"
+  | "ALREADY_CLEANED"
+  | "HAZARDOUS_UNSAFE"
+  | "OUT_OF_ZONE"
+  | "OTHER";
+
+export const REJECTION_REASONS: {
+  code: RejectionReasonCode;
+  label: string;
+  icon: string;
+  description: string;
+}[] = [
+  {
+    code: "LOCATION_INCORRECT",
+    label: "Location Incorrect",
+    icon: "📍",
+    description: "Cannot find waste at the given GPS location",
+  },
+  {
+    code: "ALREADY_CLEANED",
+    label: "Already Cleaned",
+    icon: "✨",
+    description: "Site is already clean or no waste present",
+  },
+  {
+    code: "HAZARDOUS_UNSAFE",
+    label: "Hazardous / Unsafe",
+    icon: "⚠️",
+    description: "Bio-hazard, toxic waste, or unsafe terrain",
+  },
+  {
+    code: "OUT_OF_ZONE",
+    label: "Out of Zone",
+    icon: "🚧",
+    description: "Report location is outside assigned jurisdiction",
+  },
+  {
+    code: "OTHER",
+    label: "Other Reason",
+    icon: "📝",
+    description: "Other operational condition or issue",
+  },
+];
 
 export interface ReportImageRecord {
   id: string;
@@ -214,11 +271,21 @@ export const acceptCleanup = (id: string) =>
     { method: "PATCH" },
   );
 
-export const rejectCleanup = (id: string, reason: string) =>
-  apiFetch<{ success: boolean; data: WorkerCleanup }>(
+export const rejectCleanup = (
+  id: string,
+  reasonOrPayload:
+    | string
+    | { reasonCode: RejectionReasonCode; notes?: string },
+) => {
+  const body =
+    typeof reasonOrPayload === "string"
+      ? { reason: reasonOrPayload }
+      : reasonOrPayload;
+  return apiFetch<{ success: boolean; data: WorkerCleanup }>(
     `/api/worker/cleanups/${id}/reject`,
-    { method: "PATCH", body: JSON.stringify({ reason }) },
+    { method: "PATCH", body: JSON.stringify(body) },
   );
+};
 
 export const presignCleanupImage = (
   id: string,

@@ -22,6 +22,12 @@ import {
   type WorkerStats,
   type WorkerCleanup,
 } from "@/services/workerService";
+import {
+  getQueuedEvidences,
+  syncQueuedEvidences,
+  subscribeToEvidenceQueue,
+  type QueuedEvidence,
+} from "@/services/workerOfflineQueue";
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -73,6 +79,8 @@ export default function WorkerHomeScreen() {
   const [available, setAvailable] = useState(true);
   const [stats, setStats] = useState<WorkerStats | null>(null);
   const [todayTask, setTodayTask] = useState<WorkerCleanup | null>(null);
+  const [queuedItems, setQueuedItems] = useState<QueuedEvidence[]>([]);
+  const [syncingQueue, setSyncingQueue] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -107,6 +115,26 @@ export default function WorkerHomeScreen() {
     })();
   }, []);
 
+  // Listen to offline evidence queue
+  useEffect(() => {
+    const unsub = subscribeToEvidenceQueue((queue) => {
+      setQueuedItems(queue);
+    });
+    // Auto-sync pending items if any
+    syncQueuedEvidences();
+    return () => unsub();
+  }, []);
+
+  const handleSyncQueue = async () => {
+    setSyncingQueue(true);
+    try {
+      await syncQueuedEvidences();
+      await load();
+    } finally {
+      setSyncingQueue(false);
+    }
+  };
+
   const load = useCallback(async () => {
     try {
       const [statsRes, cleanupsRes] = await Promise.all([
@@ -135,8 +163,21 @@ export default function WorkerHomeScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    load();
+    syncQueuedEvidences().then(() => load());
   };
+
+  // Week-over-week calculation
+  const thisWeek = stats?.thisWeekCompleted ?? 0;
+  const lastWeek = stats?.lastWeekCompleted ?? 0;
+  const weekDiff = thisWeek - lastWeek;
+  const weekTrendText =
+    lastWeek === 0
+      ? thisWeek > 0
+        ? `+${thisWeek} new this week`
+        : "No cleanups yet"
+      : weekDiff >= 0
+        ? `+${Math.round((weekDiff / lastWeek) * 100)}% vs last week`
+        : `${Math.round((weekDiff / lastWeek) * 100)}% vs last week`;
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
@@ -209,6 +250,102 @@ export default function WorkerHomeScreen() {
           </View>
         </View>
 
+        {/* ── Offline Pending Upload Queue Banner ──────────────────── */}
+        {queuedItems.length > 0 && (
+          <View style={styles.queueBanner}>
+            <View style={styles.queueBannerLeft}>
+              <Text style={styles.queueBannerIcon}>🔄</Text>
+              <View style={styles.queueBannerTexts}>
+                <Text style={styles.queueBannerTitle}>
+                  {queuedItems.length} Offline Upload
+                  {queuedItems.length > 1 ? "s" : ""} Pending
+                </Text>
+                <Text style={styles.queueBannerSub}>
+                  Will auto-sync when network is available
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              style={[styles.syncBtn, syncingQueue && { opacity: 0.7 }]}
+              onPress={handleSyncQueue}
+              disabled={syncingQueue}
+            >
+              {syncingQueue ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <Text style={styles.syncBtnText}>Sync Now</Text>
+              )}
+            </Pressable>
+          </View>
+        )}
+
+        {/* ── Dispute Warning Banner (if recent cleanups have disputes) ── */}
+        {stats?.disputeStats?.warning && (
+          <View style={styles.disputeBanner}>
+            <Text style={styles.disputeBannerIcon}>⚠️</Text>
+            <View style={styles.disputeBannerTexts}>
+              <Text style={styles.disputeBannerTitle}>
+                Quality Warning: {stats.disputeStats.recentDisputed} Disputed
+                Cleanup
+                {stats.disputeStats.recentDisputed > 1 ? "s" : ""}
+              </Text>
+              <Text style={styles.disputeBannerSub}>
+                {stats.disputeStats.message ??
+                  "Please ensure before & after evidence shows complete waste removal."}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* ── Performance & Streak Highlight Card ──────────────────── */}
+        <View style={styles.performanceCard}>
+          <View style={styles.streakSection}>
+            <View style={styles.streakBadge}>
+              <Text style={styles.streakEmoji}>🔥</Text>
+              <Text style={styles.streakCount}>
+                {stats?.streakDays ?? 0}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.streakLabel}>Day Streak</Text>
+              <Text style={styles.streakSub}>
+                {(stats?.streakDays ?? 0) > 0
+                  ? "Great momentum! Keep it up"
+                  : "Complete a cleanup to start"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.performanceDivider} />
+
+          <View style={styles.trendSection}>
+            <View style={styles.trendNumbers}>
+              <Text style={styles.trendValue}>{thisWeek}</Text>
+              <Text style={styles.trendUnit}>cleanups this week</Text>
+            </View>
+            <View
+              style={[
+                styles.trendPill,
+                {
+                  backgroundColor:
+                    weekDiff >= 0 ? "#E8F5E9" : "#FEF6E8",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.trendPillText,
+                  {
+                    color: weekDiff >= 0 ? "#2E7D4F" : "#E3A93A",
+                  },
+                ]}
+              >
+                {weekDiff >= 0 ? "↗" : "↘"} {weekTrendText}
+              </Text>
+            </View>
+          </View>
+        </View>
+
         {/* ── Today's Task ─────────────────────────────────────────── */}
         <Text style={styles.sectionHeader}>Today's Task</Text>
         {loading ? (
@@ -222,7 +359,9 @@ export default function WorkerHomeScreen() {
           >
             <View style={styles.todayCardTop}>
               <View style={styles.assignedBadge}>
-                <Text style={styles.assignedBadgeText}>ASSIGNED</Text>
+                <Text style={styles.assignedBadgeText}>
+                  {todayTask.status}
+                </Text>
               </View>
               <Text style={styles.taskId} numberOfLines={1}>
                 {todayTask.id.slice(0, 13).toUpperCase()}
@@ -583,6 +722,150 @@ const styles = StyleSheet.create({
     fontFamily: "Plus Jakarta Sans",
     fontWeight: "600",
     textAlign: "center",
+  },
+
+  // Offline queue banner
+  queueBanner: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  queueBannerLeft: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  queueBannerIcon: { fontSize: 20 },
+  queueBannerTexts: { flex: 1 },
+  queueBannerTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1E40AF",
+    fontFamily: "Sora",
+  },
+  queueBannerSub: {
+    fontSize: 11,
+    color: "#3B82F6",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  syncBtn: {
+    backgroundColor: "#2563EB",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+  },
+  syncBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    fontFamily: "Plus Jakarta Sans",
+  },
+
+  // Dispute warning banner
+  disputeBanner: {
+    backgroundColor: "#FFF2F2",
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#FCA5A5",
+  },
+  disputeBannerIcon: { fontSize: 20, marginTop: 2 },
+  disputeBannerTexts: { flex: 1 },
+  disputeBannerTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#991B1B",
+    fontFamily: "Sora",
+    marginBottom: 2,
+  },
+  disputeBannerSub: {
+    fontSize: 11,
+    color: "#B91C1C",
+    fontFamily: "Plus Jakarta Sans",
+    lineHeight: 16,
+  },
+
+  // Performance & streak card
+  performanceCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#DCE3D8",
+    shadowColor: "rgba(46,90,60,0.06)",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+    elevation: 2,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  streakSection: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  streakBadge: {
+    backgroundColor: "#FFF7ED",
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#FFEDD5",
+    flexDirection: "row",
+    gap: 4,
+  },
+  streakEmoji: { fontSize: 16 },
+  streakCount: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#EA580C",
+    fontFamily: "Sora",
+  },
+  streakLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#23302A",
+    fontFamily: "Sora",
+  },
+  streakSub: {
+    fontSize: 10,
+    color: "#6B7A70",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  performanceDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: "#E2E8F0",
+    marginHorizontal: 12,
+  },
+  trendSection: { flex: 1, alignItems: "flex-end" },
+  trendNumbers: { flexDirection: "row", alignItems: "baseline", gap: 4 },
+  trendValue: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#23302A",
+    fontFamily: "Sora",
+  },
+  trendUnit: {
+    fontSize: 10,
+    color: "#6B7A70",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  trendPill: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginTop: 4,
+  },
+  trendPillText: {
+    fontSize: 10,
+    fontWeight: "700",
+    fontFamily: "Plus Jakarta Sans",
   },
 
   // Quick actions

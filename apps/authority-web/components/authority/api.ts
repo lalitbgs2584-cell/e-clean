@@ -57,6 +57,7 @@ export const authorityApi = {
       action: ReportActionType;
       workerId?: string;
       duplicateOfId?: string;
+      recyclingPartnerId?: string;
       verificationResult?: VerificationResult;
       note?: string;
     },
@@ -69,6 +70,54 @@ export const authorityApi = {
         body: JSON.stringify(payload),
       },
     );
+  },
+  suggestedWorkers(token: string, reportId: string) {
+    return request<{ success: boolean; data: any[] }>(
+      `/api/authority/reports/${reportId}/suggested-workers`,
+      token,
+    );
+  },
+  bulkDuplicates(
+    token: string,
+    canonicalReportId: string,
+    duplicateReportIds: string[],
+  ) {
+    return request<{ success: boolean; linkedCount: number }>(
+      "/api/authority/reports/bulk-duplicates",
+      token,
+      {
+        method: "POST",
+        body: JSON.stringify({ canonicalReportId, duplicateReportIds }),
+      },
+    );
+  },
+  recyclingPartners(token: string) {
+    return request<{ success: boolean; data: any[] }>(
+      "/api/authority/recycling-partners",
+      token,
+    );
+  },
+  getExportUrl(
+    filters: {
+      status?: string;
+      attention?: string;
+      category?: string;
+      zone?: string;
+      from?: string;
+      to?: string;
+    } = {},
+  ) {
+    const params = new URLSearchParams({ format: "csv" });
+    if (filters.status && filters.status !== "ALL")
+      params.set("status", filters.status);
+    if (filters.attention && filters.attention !== "ALL")
+      params.set("attention", filters.attention);
+    if (filters.category && filters.category !== "ALL")
+      params.set("category", filters.category);
+    if (filters.zone && filters.zone !== "ALL") params.set("zone", filters.zone);
+    if (filters.from) params.set("from", filters.from);
+    if (filters.to) params.set("to", filters.to);
+    return `/api/authority/reports/export?${params.toString()}`;
   },
   provisionAuthority(token: string) {
     return request<{ id: string; role: string }>(

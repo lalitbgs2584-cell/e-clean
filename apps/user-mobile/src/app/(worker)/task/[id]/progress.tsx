@@ -26,8 +26,14 @@ import {
   uploadToPresignedUrl,
   type WorkerCleanup,
 } from "@/services/workerService";
+import {
+  enqueueEvidence,
+  getQueuedEvidenceForCleanup,
+  syncQueuedEvidences,
+} from "@/services/workerOfflineQueue";
 import { ContentWithBottomBar } from "@/components/layout/ContentWithBottomBar";
 import { useAppModal } from "@/hooks/useAppModal";
+import * as Network from "expo-network";
 
 // ---- worker camera modal ----------------------------------------------------
 
@@ -157,6 +163,7 @@ export default function TaskProgressScreen() {
   const [afterKey, setAfterKey] = useState<string | null>(null);
   const [noWasteUri, setNoWasteUri] = useState<string | null>(null);
   const [noWasteKey, setNoWasteKey] = useState<string | null>(null);
+  const [isOfflineQueued, setIsOfflineQueued] = useState(false);
 
   const [notes, setNotes] = useState("");
   const [uploading, setUploading] = useState<
@@ -166,11 +173,21 @@ export default function TaskProgressScreen() {
 
   const load = useCallback(async () => {
     try {
-      const res = await getWorkerCleanup(id);
+      const [res, queued] = await Promise.all([
+        getWorkerCleanup(id),
+        getQueuedEvidenceForCleanup(id),
+      ]);
       setCleanup(res.data);
-      // Pre-fill keys if already uploaded (idempotency)
       if (res.data.beforeImageId) setBeforeKey("exists");
       if (res.data.afterImageId) setAfterKey("exists");
+
+      if (queued) {
+        setIsOfflineQueued(true);
+        if (queued.beforeUri) setBeforeUri(queued.beforeUri);
+        if (queued.afterUri) setAfterUri(queued.afterUri);
+        if (queued.noWasteUri) setNoWasteUri(queued.noWasteUri);
+        if (queued.notes) setNotes(queued.notes);
+      }
     } catch (e: any) {
       showModal({
         variant: "error",
@@ -207,21 +224,13 @@ export default function TaskProgressScreen() {
       else if (slot === "after") setAfterKey(presign.key);
       else setNoWasteKey(presign.key);
     } catch (e: any) {
+      // If upload fails (e.g. offline/network error), photo URI is preserved for offline queue
       showModal({
-        variant: "error",
-        title: "Upload failed",
-        message: e.message ?? "Could not upload photo. Please try again.",
+        variant: "info",
+        title: "Photo saved locally",
+        message:
+          "Photo saved on device. If offline, it will be uploaded when you complete the task or reconnect.",
       });
-      if (slot === "before") {
-        setBeforeUri(null);
-        setBeforeKey(null);
-      } else if (slot === "after") {
-        setAfterUri(null);
-        setAfterKey(null);
-      } else {
-        setNoWasteUri(null);
-        setNoWasteKey(null);
-      }
     } finally {
       setUploading(null);
     }
@@ -230,7 +239,7 @@ export default function TaskProgressScreen() {
   // ---- complete cleanup -----------------------------------------------------
 
   const handleComplete = async () => {
-    if (!beforeKey || !afterKey) {
+    if (!beforeUri || !afterUri) {
       showModal({
         variant: "info",
         title: "Photos required",
@@ -238,27 +247,60 @@ export default function TaskProgressScreen() {
       });
       return;
     }
+
     setCompleting(true);
     try {
-      await completeCleanup(id, {
-        beforeImageKey: beforeKey,
-        afterImageKey: afterKey,
+      // Check network status
+      const net = await Network.getNetworkStateAsync();
+      const isConnected = net.isConnected && net.isInternetReachable !== false;
+
+      if (isConnected && beforeKey && afterKey) {
+        await completeCleanup(id, {
+          beforeImageKey: beforeKey,
+          afterImageKey: afterKey,
+          notes: notes.trim() || undefined,
+        });
+        router.replace(`/(worker)/task/${id}/completed` as any);
+      } else {
+        // Save to offline queue for background sync
+        await enqueueEvidence({
+          cleanupId: id,
+          type: "complete",
+          beforeUri,
+          afterUri,
+          notes: notes.trim() || undefined,
+        });
+        showModal({
+          variant: "success",
+          title: "Saved to Offline Queue",
+          message:
+            "Task evidence is saved safely on your phone and will automatically upload once network connection is restored.",
+        });
+        router.replace("/(worker)/(tabs)/tasks" as any);
+      }
+    } catch (e: any) {
+      // Fallback: save to offline queue
+      await enqueueEvidence({
+        cleanupId: id,
+        type: "complete",
+        beforeUri,
+        afterUri,
         notes: notes.trim() || undefined,
       });
-      router.replace(`/(worker)/task/${id}/completed` as any);
-    } catch (e: any) {
       showModal({
-        variant: "error",
-        title: "Could not complete task",
-        message: e.message ?? "Could not complete task.",
+        variant: "info",
+        title: "Queued for Offline Upload",
+        message:
+          "Network error occurred. Task evidence was queued locally and will upload automatically.",
       });
+      router.replace("/(worker)/(tabs)/tasks" as any);
     } finally {
       setCompleting(false);
     }
   };
 
   const handleNoWasteFound = async () => {
-    if (!noWasteKey) {
+    if (!noWasteUri) {
       showModal({
         variant: "info",
         title: "Proof photo required",
@@ -277,17 +319,45 @@ export default function TaskProgressScreen() {
         onPress: async () => {
           setCompleting(true);
           try {
-            await submitNoWasteFound(id, {
-              imageKey: noWasteKey,
+            const net = await Network.getNetworkStateAsync();
+            const isConnected =
+              net.isConnected && net.isInternetReachable !== false;
+
+            if (isConnected && noWasteKey) {
+              await submitNoWasteFound(id, {
+                imageKey: noWasteKey,
+                notes: notes.trim() || undefined,
+              });
+              router.replace(`/(worker)/task/${id}/completed` as any);
+            } else {
+              await enqueueEvidence({
+                cleanupId: id,
+                type: "no-waste",
+                noWasteUri,
+                notes: notes.trim() || undefined,
+              });
+              showModal({
+                variant: "success",
+                title: "Saved to Offline Queue",
+                message:
+                  "No-waste proof is saved on your phone and will automatically upload when network returns.",
+              });
+              router.replace("/(worker)/(tabs)/tasks" as any);
+            }
+          } catch (e: any) {
+            await enqueueEvidence({
+              cleanupId: id,
+              type: "no-waste",
+              noWasteUri,
               notes: notes.trim() || undefined,
             });
-            router.replace(`/(worker)/task/${id}/completed` as any);
-          } catch (e: any) {
             showModal({
-              variant: "error",
-              title: "Could not submit proof",
-              message: e.message ?? "Please try again.",
+              variant: "info",
+              title: "Queued for Offline Upload",
+              message:
+                "Proof photo saved locally and queued for automatic upload.",
             });
+            router.replace("/(worker)/(tabs)/tasks" as any);
           } finally {
             setCompleting(false);
           }
@@ -302,7 +372,7 @@ export default function TaskProgressScreen() {
   const openMaps = () => {
     if (!cleanup) return;
     const { latitude, longitude } = cleanup.report;
-    const url = `https://maps.google.com/maps?q=${latitude},${longitude}`;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
     Linking.openURL(url);
   };
 
@@ -322,7 +392,7 @@ export default function TaskProgressScreen() {
     );
   }
 
-  const canComplete = !!beforeKey && !!afterKey;
+  const canComplete = !!beforeUri && !!afterUri;
   const report = cleanup?.report;
 
   return (

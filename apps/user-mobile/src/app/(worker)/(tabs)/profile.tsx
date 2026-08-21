@@ -168,6 +168,16 @@ export default function WorkerProfileScreen() {
         <View style={styles.statsRow}>
           {[
             {
+              label: "Streak",
+              value: `${stats?.streakDays ?? 0}🔥`,
+              color: "#EA580C",
+            },
+            {
+              label: "This Week",
+              value: stats?.thisWeekCompleted ?? 0,
+              color: "#3B82F6",
+            },
+            {
               label: "Completed",
               value: stats?.completed ?? 0,
               color: "#2E7D4F",
@@ -176,11 +186,6 @@ export default function WorkerProfileScreen() {
               label: "Verified",
               value: stats?.verified ?? 0,
               color: "#7C3AED",
-            },
-            {
-              label: "Success Rate",
-              value: `${successRate}%`,
-              color: "#E3A93A",
             },
           ].map((s) => (
             <View key={s.label} style={styles.statCard}>
