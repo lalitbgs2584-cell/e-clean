@@ -25,7 +25,8 @@ export type ReportActionType =
   | "mark_verified"
   | "mark_disputed"
   | "start_cleanup"
-  | "complete_cleanup";
+  | "complete_cleanup"
+  | "route_recycling";
 
 export type StatusStepState = "done" | "current" | "blocked" | "upcoming";
 
@@ -76,6 +77,38 @@ export type AuthorityVerification = {
   user: AuthorityUser;
 };
 
+export type RecyclingPartnerRecord = {
+  id: string;
+  name: string;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  city: string | null;
+  area: string | null;
+  acceptedCategories: string[];
+};
+
+export type SuggestedWorker = {
+  id: string;
+  name: string;
+  email: string;
+  zone: string | null;
+  image: string | null;
+  profileImageUrl: string | null;
+  activeAssignments: number;
+  score: number;
+  matchReasons: string[];
+};
+
+export type PersonOfTheWeek = {
+  id: string;
+  name: string;
+  image: string | null;
+  profileImageUrl: string | null;
+  points: number;
+  verifiedReportsCount: number;
+  title: string;
+};
+
 export type AuthorityReport = {
   id: string;
   description: string | null;
@@ -96,7 +129,10 @@ export type AuthorityReport = {
   aiProcessedAt: string | null;
   duplicateOfId: string | null;
   upvoteCount: number;
+  recyclingPartnerId?: string | null;
+  recyclingPartner?: RecyclingPartnerRecord | null;
   recyclingStatus: string | null;
+  routedToRecyclingAt?: string | null;
   status: ReportStatus;
   createdAt: string;
   updatedAt: string;
@@ -172,9 +208,11 @@ export type AuthorityDashboardPayload = {
     averageResolutionHours: number | null;
     resolutionEfficiency: number;
   };
+  personOfTheWeek?: PersonOfTheWeek | null;
   reports: AuthorityReport[];
   workers: AuthorityWorker[];
   zones: AuthorityZone[];
+  recyclingPartners?: RecyclingPartnerRecord[];
   charts: {
     dailyVolume: AuthorityChartSeries;
   };

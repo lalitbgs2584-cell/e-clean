@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "db/client";
 import { requireAuthoritySession, serializeReport } from "../../_lib";
 
@@ -10,6 +10,7 @@ async function getReport(reportId: string) {
     include: {
       user: true,
       images: true,
+      recyclingPartner: true,
       cleanup: {
         include: {
           worker: true,
@@ -170,6 +171,45 @@ export async function PATCH(
           title: "Cleanup approved",
           message:
             "The authority has approved the cleanup. Please verify the area when you can.",
+        },
+      });
+    }
+
+    if (action === "route_recycling") {
+      if (!body?.recyclingPartnerId) {
+        return NextResponse.json(
+          { error: "recyclingPartnerId is required" },
+          { status: 400 },
+        );
+      }
+
+      const partner = await prisma.recyclingPartner.findUnique({
+        where: { id: body.recyclingPartnerId },
+      });
+      if (!partner) {
+        return NextResponse.json(
+          { error: "Recycling partner not found" },
+          { status: 404 },
+        );
+      }
+
+      await prisma.report.update({
+        where: { id },
+        data: {
+          recyclingPartnerId: partner.id,
+          recyclingStatus: "ROUTED",
+          routedToRecyclingAt: new Date(),
+          status: "ASSIGNED",
+        },
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: report.userId,
+          reportId: id,
+          type: "REPORT_ASSIGNED",
+          title: "Routed to Recycling Partner",
+          message: `Your report has been routed to our recycling partner: ${partner.name}.`,
         },
       });
     }

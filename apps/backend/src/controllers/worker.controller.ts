@@ -120,6 +120,18 @@ export const getWorkerStats = async (
 ) => {
   try {
     const workerId = req.user!.id;
+    const now = new Date();
+
+    // Start of this week (Monday 00:00:00)
+    const thisWeekStart = new Date(now);
+    const dayOfWeek = thisWeekStart.getDay(); // 0 is Sun, 1 is Mon...
+    const diffToMonday = (dayOfWeek === 0 ? -6 : 1) - dayOfWeek;
+    thisWeekStart.setDate(thisWeekStart.getDate() + diffToMonday);
+    thisWeekStart.setHours(0, 0, 0, 0);
+
+    // Start of last week
+    const lastWeekStart = new Date(thisWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
 
     const [
       assigned,
@@ -128,12 +140,15 @@ export const getWorkerStats = async (
       cancelled,
       verifiedCount,
       disputedCount,
+      thisWeekCompleted,
+      lastWeekCompleted,
+      completedCleanupsForStreak,
+      recentCleanupsForDisputes,
     ] = await Promise.all([
       prisma.cleanup.count({ where: { workerId, status: "ASSIGNED" } }),
       prisma.cleanup.count({ where: { workerId, status: "IN_PROGRESS" } }),
       prisma.cleanup.count({ where: { workerId, status: "COMPLETED" } }),
       prisma.cleanup.count({ where: { workerId, status: "CANCELLED" } }),
-      // Verified = cleanup's parent report has a VERIFIED verification result
       prisma.cleanup.count({
         where: {
           workerId,
@@ -150,7 +165,97 @@ export const getWorkerStats = async (
           },
         },
       }),
+      prisma.cleanup.count({
+        where: {
+          workerId,
+          status: "COMPLETED",
+          completedAt: { gte: thisWeekStart },
+        },
+      }),
+      prisma.cleanup.count({
+        where: {
+          workerId,
+          status: "COMPLETED",
+          completedAt: { gte: lastWeekStart, lt: thisWeekStart },
+        },
+      }),
+      prisma.cleanup.findMany({
+        where: {
+          workerId,
+          status: "COMPLETED",
+          completedAt: { not: null },
+        },
+        select: { completedAt: true },
+        orderBy: { completedAt: "desc" },
+        take: 60,
+      }),
+      prisma.cleanup.findMany({
+        where: {
+          workerId,
+          status: "COMPLETED",
+        },
+        orderBy: { completedAt: "desc" },
+        take: 10,
+        select: {
+          id: true,
+          report: {
+            select: {
+              verification: {
+                select: { result: true },
+              },
+            },
+          },
+        },
+      }),
     ]);
+
+    // Calculate streak days (consecutive days with >= 1 completed cleanup)
+    let streakDays = 0;
+    if (completedCleanupsForStreak.length > 0) {
+      const datesSet = new Set<string>();
+      for (const item of completedCleanupsForStreak) {
+        if (item.completedAt) {
+          const dStr = new Date(item.completedAt).toISOString().split("T")[0];
+          if (dStr) datesSet.add(dStr);
+        }
+      }
+
+      const todayStr = now.toISOString().split("T")[0] ?? "";
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split("T")[0] ?? "";
+
+      let checkDate: Date | null = new Date(now);
+      // If no completion today, check if streak is alive from yesterday
+      if (!datesSet.has(todayStr)) {
+        if (datesSet.has(yesterdayStr)) {
+          checkDate = yesterday;
+        } else {
+          checkDate = null;
+        }
+      }
+
+      if (checkDate) {
+        while (true) {
+          const key = checkDate.toISOString().split("T")[0];
+          if (key && datesSet.has(key)) {
+            streakDays += 1;
+            checkDate.setDate(checkDate.getDate() - 1);
+          } else {
+            break;
+          }
+        }
+      }
+    }
+
+    // Calculate recent dispute stats (out of up to last 10 cleanups)
+    const recentTotal = recentCleanupsForDisputes.length;
+    const recentDisputed = recentCleanupsForDisputes.filter(
+      (c) => c.report?.verification?.result === "DISPUTED",
+    ).length;
+    const disputeRatePercent =
+      recentTotal > 0 ? Math.round((recentDisputed / recentTotal) * 100) : 0;
+    const disputeWarning = recentTotal >= 3 && (recentDisputed >= 2 || disputeRatePercent >= 25);
 
     return res.json({
       success: true,
@@ -161,6 +266,18 @@ export const getWorkerStats = async (
         cancelled,
         verified: verifiedCount,
         disputed: disputedCount,
+        thisWeekCompleted,
+        lastWeekCompleted,
+        streakDays,
+        disputeStats: {
+          recentTotal,
+          recentDisputed,
+          disputeRatePercent,
+          warning: disputeWarning,
+          message: disputeWarning
+            ? `${recentDisputed} of your last ${recentTotal} cleanups were disputed. Please review cleanup guidelines.`
+            : null,
+        },
       },
     });
   } catch (err) {
@@ -385,9 +502,19 @@ export const rejectWorkerCleanup = async (
   try {
     const id = req.params.id as string;
     const workerId = req.user!.id;
-    const reason =
-      typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
-    if (!reason) {
+    const body = req.body ?? {};
+    
+    // Support structured reason codes or legacy string
+    let formattedReason = "";
+    if (typeof body.reasonCode === "string" && body.reasonCode.trim()) {
+      const code = body.reasonCode.trim().toUpperCase();
+      const notes = typeof body.notes === "string" ? body.notes.trim() : "";
+      formattedReason = notes ? `[${code}] ${notes}` : code;
+    } else if (typeof body.reason === "string" && body.reason.trim()) {
+      formattedReason = body.reason.trim();
+    }
+
+    if (!formattedReason) {
       return res
         .status(400)
         .json({ success: false, error: "A rejection reason is required" });
@@ -412,7 +539,7 @@ export const rejectWorkerCleanup = async (
         data: {
           status: "REJECTED",
           rejectedAt: new Date(),
-          rejectionReason: reason,
+          rejectionReason: formattedReason,
         },
         include: {
           report: true,

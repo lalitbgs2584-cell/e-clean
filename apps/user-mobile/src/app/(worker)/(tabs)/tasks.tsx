@@ -1,13 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Pressable,
   StatusBar, ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
 import {
   getWorkerCleanups, type WorkerCleanup, type CleanupStatus,
 } from '@/services/workerService';
+import {
+  subscribeToEvidenceQueue,
+  type QueuedEvidence,
+} from '@/services/workerOfflineQueue';
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -40,14 +45,63 @@ const formatDate = (iso: string) =>
     day: '2-digit', month: 'short', year: 'numeric',
   });
 
+const haversineKm = (
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 // ---- component --------------------------------------------------------------
 
 export default function WorkerTasksScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<FilterTab>('ALL');
   const [cleanups, setCleanups] = useState<WorkerCleanup[]>([]);
+  const [queuedItems, setQueuedItems] = useState<QueuedEvidence[]>([]);
+  const [userLocation, setUserLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [sortByDistance, setSortByDistance] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Subscribe to offline queue
+  useEffect(() => {
+    const unsub = subscribeToEvidenceQueue((queue) => {
+      setQueuedItems(queue);
+    });
+    return () => unsub();
+  }, []);
+
+  // Request user location for distance calculation
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+          setUserLocation({
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+          });
+        }
+      } catch {}
+    })();
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -66,25 +120,64 @@ export default function WorkerTasksScreen() {
 
   const onRefresh = () => { setRefreshing(true); load(); };
 
+  // Calculate distance & sorted cleanups
+  const displayedCleanups = useMemo(() => {
+    if (!userLocation || !sortByDistance) return cleanups;
+    return [...cleanups].sort((a, b) => {
+      const distA = haversineKm(
+        userLocation.latitude,
+        userLocation.longitude,
+        a.report.latitude,
+        a.report.longitude,
+      );
+      const distB = haversineKm(
+        userLocation.latitude,
+        userLocation.longitude,
+        b.report.latitude,
+        b.report.longitude,
+      );
+      return distA - distB;
+    });
+  }, [cleanups, userLocation, sortByDistance]);
+
   // ---- render ---------------------------------------------------------------
 
   const renderCard = ({ item }: { item: WorkerCleanup }) => {
     const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.ASSIGNED;
+    const isQueued = queuedItems.some((q) => q.cleanupId === item.id);
+    
+    let distText: string | null = null;
+    if (userLocation) {
+      const km = haversineKm(
+        userLocation.latitude,
+        userLocation.longitude,
+        item.report.latitude,
+        item.report.longitude,
+      );
+      distText = km < 1 ? `${Math.round(km * 1000)}m away` : `${km.toFixed(1)}km away`;
+    }
+
     return (
       <Pressable
         style={styles.card}
         onPress={() => router.push(`/(worker)/task/${item.id}` as any)}>
         {/* Status accent bar */}
-        <View style={[styles.accentBar, { backgroundColor: cfg.color }]} />
+        <View style={[styles.accentBar, { backgroundColor: isQueued ? '#3B82F6' : cfg.color }]} />
 
         <View style={styles.cardBody}>
           <View style={styles.cardTopRow}>
             <Text style={styles.cardId} numberOfLines={1}>
               {item.id.slice(0, 13).toUpperCase()}
             </Text>
-            <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
-              <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-            </View>
+            {isQueued ? (
+              <View style={[styles.statusBadge, { backgroundColor: '#EFF6FF' }]}>
+                <Text style={[styles.statusText, { color: '#2563EB' }]}>⏳ Pending Upload</Text>
+              </View>
+            ) : (
+              <View style={[styles.statusBadge, { backgroundColor: cfg.bg }]}>
+                <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.cardRow}>
@@ -92,6 +185,11 @@ export default function WorkerTasksScreen() {
             <Text style={styles.rowText} numberOfLines={1}>
               {item.report.zone ?? `${item.report.latitude.toFixed(4)}, ${item.report.longitude.toFixed(4)}`}
             </Text>
+            {distText && (
+              <View style={styles.distBadge}>
+                <Text style={styles.distText}>{distText}</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.cardRow}>
@@ -121,9 +219,21 @@ export default function WorkerTasksScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="dark-content" backgroundColor="#FAFBF8" />
 
-      {/* Header */}
+      {/* Header with Route Optimisation Toggle */}
       <View style={styles.header}>
-        <Text style={styles.title}>My Tasks</Text>
+        <View style={styles.headerTitleRow}>
+          <Text style={styles.title}>My Tasks</Text>
+          {userLocation && (
+            <Pressable
+              style={[styles.sortBtn, sortByDistance && styles.sortBtnActive]}
+              onPress={() => setSortByDistance(!sortByDistance)}>
+              <Text style={styles.sortBtnIcon}>🧭</Text>
+              <Text style={[styles.sortBtnText, sortByDistance && styles.sortBtnTextActive]}>
+                {sortByDistance ? 'Nearest First' : 'Sort Nearest'}
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
       {/* Filter tabs */}
@@ -147,7 +257,7 @@ export default function WorkerTasksScreen() {
         </View>
       ) : (
         <FlatList
-          data={cleanups}
+          data={displayedCleanups}
           keyExtractor={(item) => item.id}
           renderItem={renderCard}
           contentContainerStyle={styles.listContent}
@@ -177,8 +287,38 @@ export default function WorkerTasksScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FAFBF8' },
   header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  headerTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   title: {
     fontSize: 22, fontWeight: '800', color: '#23302A', fontFamily: 'Sora',
+  },
+  sortBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+  },
+  sortBtnActive: {
+    backgroundColor: '#2E7D4F',
+    borderColor: '#2E7D4F',
+  },
+  sortBtnIcon: { fontSize: 13 },
+  sortBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2E7D4F',
+    fontFamily: 'Plus Jakarta Sans',
+  },
+  sortBtnTextActive: {
+    color: '#FCFEFA',
   },
 
   // Filter tabs
@@ -220,6 +360,18 @@ const styles = StyleSheet.create({
   rowText: {
     fontSize: 12, color: '#6B7A70', fontFamily: 'Plus Jakarta Sans',
     fontWeight: '600', flex: 1,
+  },
+  distBadge: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  distText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#4B5563',
+    fontFamily: 'Plus Jakarta Sans',
   },
   urgentBadge: {
     backgroundColor: '#FFF2F2', paddingHorizontal: 6, paddingVertical: 1,

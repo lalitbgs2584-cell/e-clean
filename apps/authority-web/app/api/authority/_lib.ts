@@ -217,11 +217,22 @@ export function serializeReport(report: any): AuthorityReport {
     attention: report.attention,
     nearSensitiveLocation: report.nearSensitiveLocation,
     severityScore: report.severityScore ?? null,
-    aiConfidence: report.aiConfidence ?? null,
-    aiProcessedAt: toIso(report.aiProcessedAt),
     duplicateOfId: report.duplicateOfId ?? null,
     upvoteCount: report.upvoteCount ?? 0,
+    recyclingPartnerId: report.recyclingPartnerId ?? null,
+    recyclingPartner: report.recyclingPartner
+      ? {
+          id: report.recyclingPartner.id,
+          name: report.recyclingPartner.name,
+          contactPhone: report.recyclingPartner.contactPhone ?? null,
+          contactEmail: report.recyclingPartner.contactEmail ?? null,
+          city: report.recyclingPartner.city ?? null,
+          area: report.recyclingPartner.area ?? null,
+          acceptedCategories: report.recyclingPartner.acceptedCategories ?? [],
+        }
+      : null,
     recyclingStatus: report.recyclingStatus ?? null,
+    routedToRecyclingAt: toIso(report.routedToRecyclingAt),
     status: report.status as ReportStatus,
     createdAt: toIso(report.createdAt) ?? new Date().toISOString(),
     updatedAt: toIso(report.updatedAt) ?? new Date().toISOString(),
@@ -423,13 +434,14 @@ function buildWorkers(workers: any[]): any[] {
 }
 
 export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload> {
-  const [rawReports, rawWorkers, notifications] = await Promise.all([
+  const [rawReports, rawWorkers, notifications, rawRecyclingPartners, topCitizen] = await Promise.all([
     prisma.report.findMany({
       orderBy: { createdAt: "desc" },
       take: 120,
       include: {
         user: true,
         images: true,
+        recyclingPartner: true,
         cleanup: {
           include: {
             worker: true,
@@ -497,7 +509,43 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
         },
       },
     }),
+    prisma.recyclingPartner.findMany({
+      orderBy: { name: "asc" },
+    }),
+    prisma.user.findFirst({
+      where: { role: "CITIZEN", isActive: true },
+      orderBy: [{ points: "desc" }, { createdAt: "asc" }],
+      include: {
+        reports: {
+          where: { status: "VERIFIED" },
+          select: { id: true },
+        },
+      },
+    }),
   ]);
+
+  let personOfTheWeek: any = null;
+  if (topCitizen) {
+    personOfTheWeek = {
+      id: topCitizen.id,
+      name: topCitizen.name,
+      image: topCitizen.image ?? null,
+      profileImageUrl: profileImageUrl(topCitizen.image),
+      points: topCitizen.points ?? 0,
+      verifiedReportsCount: topCitizen.reports?.length ?? 0,
+      title: "Eco Champion of the Week",
+    };
+  }
+
+  const recyclingPartners = rawRecyclingPartners.map((rp) => ({
+    id: rp.id,
+    name: rp.name,
+    contactPhone: rp.contactPhone ?? null,
+    contactEmail: rp.contactEmail ?? null,
+    city: rp.city ?? null,
+    area: rp.area ?? null,
+    acceptedCategories: rp.acceptedCategories ?? [],
+  }));
 
   const reports: AuthorityReport[] = rawReports.map(serializeReport);
   const workers = buildWorkers(rawWorkers);
@@ -564,9 +612,11 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
       averageResolutionHours,
       resolutionEfficiency,
     },
+    personOfTheWeek,
     reports,
     workers,
     zones,
+    recyclingPartners,
     charts: {
       dailyVolume: buildDailySeries(rawReports),
     },

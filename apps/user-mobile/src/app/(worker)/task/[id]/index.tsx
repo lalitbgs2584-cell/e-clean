@@ -20,8 +20,11 @@ import {
   rejectCleanup,
   startCleanup,
   type WorkerCleanup,
+  type RejectionReasonCode,
+  REJECTION_REASONS,
 } from "@/services/workerService";
 import { useAppModal } from "@/hooks/useAppModal";
+import { Linking } from "react-native";
 
 // ---- helpers ----------------------------------------------------------------
 
@@ -98,7 +101,9 @@ export default function TaskDetailScreen() {
   const [starting, setStarting] = useState(false);
   const [responding, setResponding] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
-  const [rejectionReason, setRejectionReason] = useState("");
+  const [selectedReason, setSelectedReason] =
+    useState<RejectionReasonCode>("LOCATION_INCORRECT");
+  const [rejectionNotes, setRejectionNotes] = useState("");
   const [distKm, setDistKm] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -138,6 +143,13 @@ export default function TaskDetailScreen() {
       setDistKm(km);
     })();
   }, [cleanup]);
+
+  const handleOpenMaps = () => {
+    if (!cleanup) return;
+    const { latitude, longitude } = cleanup.report;
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+    Linking.openURL(url);
+  };
 
   const handleStartTask = async () => {
     if (!cleanup || starting) return;
@@ -201,18 +213,12 @@ export default function TaskDetailScreen() {
 
   const confirmRejectTask = async () => {
     if (!cleanup || responding) return;
-    const value = rejectionReason.trim();
-    if (!value) {
-      showModal({
-        variant: "info",
-        title: "Reason required",
-        message: "Please provide a reason.",
-      });
-      return;
-    }
     setResponding(true);
     try {
-      await rejectCleanup(cleanup.id, value);
+      await rejectCleanup(cleanup.id, {
+        reasonCode: selectedReason,
+        notes: rejectionNotes.trim() || undefined,
+      });
       setRejectOpen(false);
       router.replace("/(worker)/(tabs)/tasks" as any);
     } catch (e: any) {
@@ -295,27 +301,37 @@ export default function TaskDetailScreen() {
             </View>
           )}
           {canStart && (
-            <Pressable
-              style={[styles.startBtn, starting && { opacity: 0.7 }]}
-              onPress={handleStartTask}
-              disabled={starting}
-            >
-              {starting ? (
-                <ActivityIndicator color="#FCFEFA" />
-              ) : (
-                <Text style={styles.startBtnText}>▶ Start Task</Text>
-              )}
-            </Pressable>
+            <View style={styles.actionColumn}>
+              <Pressable style={styles.navigateBtn} onPress={handleOpenMaps}>
+                <Text style={styles.navigateBtnText}>🧭 Navigate in Maps</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.startBtn, starting && { opacity: 0.7 }]}
+                onPress={handleStartTask}
+                disabled={starting}
+              >
+                {starting ? (
+                  <ActivityIndicator color="#FCFEFA" />
+                ) : (
+                  <Text style={styles.startBtnText}>▶ Start Task</Text>
+                )}
+              </Pressable>
+            </View>
           )}
           {inProgress && (
-            <Pressable
-              style={styles.continueBtn}
-              onPress={() =>
-                router.push(`/(worker)/task/${cleanup.id}/progress` as any)
-              }
-            >
-              <Text style={styles.continueBtnText}>→ Continue Task</Text>
-            </Pressable>
+            <View style={styles.actionColumn}>
+              <Pressable style={styles.navigateBtn} onPress={handleOpenMaps}>
+                <Text style={styles.navigateBtnText}>🧭 Navigate in Maps</Text>
+              </Pressable>
+              <Pressable
+                style={styles.continueBtn}
+                onPress={() =>
+                  router.push(`/(worker)/task/${cleanup.id}/progress` as any)
+                }
+              >
+                <Text style={styles.continueBtnText}>→ Continue Task</Text>
+              </Pressable>
+            </View>
           )}
           {cleanup.status === "COMPLETED" && (
             <Pressable
@@ -340,15 +356,52 @@ export default function TaskDetailScreen() {
           >
             <View style={styles.modalBackdrop}>
               <View style={styles.rejectModal}>
-                <Text style={styles.rejectModalTitle}>Reject assignment</Text>
+                <Text style={styles.rejectModalTitle}>Select Rejection Reason</Text>
                 <Text style={styles.rejectModalText}>
-                  The authority will be asked to assign this cleanup to another
-                  worker.
+                  Please choose why you are unable to fulfill this cleanup assignment:
                 </Text>
+
+                <View style={styles.reasonList}>
+                  {REJECTION_REASONS.map((r) => {
+                    const isSelected = selectedReason === r.code;
+                    return (
+                      <Pressable
+                        key={r.code}
+                        style={[
+                          styles.reasonItem,
+                          isSelected && styles.reasonItemSelected,
+                        ]}
+                        onPress={() => setSelectedReason(r.code)}
+                      >
+                        <Text style={styles.reasonIcon}>{r.icon}</Text>
+                        <View style={styles.reasonTexts}>
+                          <Text
+                            style={[
+                              styles.reasonLabel,
+                              isSelected && styles.reasonLabelSelected,
+                            ]}
+                          >
+                            {r.label}
+                          </Text>
+                          <Text style={styles.reasonDesc}>{r.description}</Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.radioCircle,
+                            isSelected && styles.radioCircleSelected,
+                          ]}
+                        >
+                          {isSelected && <View style={styles.radioInner} />}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
                 <TextInput
-                  value={rejectionReason}
-                  onChangeText={setRejectionReason}
-                  placeholder="Reason for rejecting"
+                  value={rejectionNotes}
+                  onChangeText={setRejectionNotes}
+                  placeholder="Additional notes or comments (optional)"
                   placeholderTextColor="#6B7A70"
                   style={styles.rejectInput}
                   multiline
@@ -366,7 +419,7 @@ export default function TaskDetailScreen() {
                     disabled={responding}
                   >
                     <Text style={styles.modalRejectText}>
-                      {responding ? "Sending…" : "Reject task"}
+                      {responding ? "Sending…" : "Confirm Rejection"}
                     </Text>
                   </Pressable>
                 </View>
@@ -403,6 +456,22 @@ export default function TaskDetailScreen() {
           <Text style={styles.imagePlaceholderText}>📷 No report photo</Text>
         </View>
       )}
+
+      {/* Location Navigation Banner */}
+      <Pressable style={styles.locationBanner} onPress={handleOpenMaps}>
+        <View style={styles.locationBannerLeft}>
+          <Text style={styles.locationBannerIcon}>🧭</Text>
+          <View style={styles.locationBannerTexts}>
+            <Text style={styles.locationBannerTitle}>
+              {report.zone ?? "Task Coordinates"}
+            </Text>
+            <Text style={styles.locationBannerSub}>
+              {distKm ? `${distKm} km away • ` : ""}Tap to open in Google Maps
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.locationBannerArrow}>→</Text>
+      </Pressable>
 
       {/* Info cards */}
       <View style={styles.infoCard}>
@@ -631,6 +700,102 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  // Location banner
+  locationBanner: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  locationBannerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  locationBannerIcon: { fontSize: 20 },
+  locationBannerTexts: { flex: 1 },
+  locationBannerTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#166534",
+    fontFamily: "Sora",
+  },
+  locationBannerSub: {
+    fontSize: 11,
+    color: "#22C55E",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  locationBannerArrow: { fontSize: 16, color: "#166534", fontWeight: "800" },
+
+  actionColumn: { gap: 10 },
+  navigateBtn: {
+    backgroundColor: "#F0FDF4",
+    borderRadius: 999,
+    paddingVertical: 14,
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#2E7D4F",
+  },
+  navigateBtnText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#2E7D4F",
+    fontFamily: "Sora",
+  },
+
+  // Structured rejection modal
+  reasonList: { gap: 8, marginVertical: 4 },
+  reasonItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    backgroundColor: "#F9FAFB",
+    gap: 10,
+  },
+  reasonItemSelected: {
+    borderColor: "#D64545",
+    backgroundColor: "#FFF5F5",
+  },
+  reasonIcon: { fontSize: 18 },
+  reasonTexts: { flex: 1 },
+  reasonLabel: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#1F2937",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  reasonLabelSelected: { color: "#991B1B" },
+  reasonDesc: {
+    fontSize: 10,
+    color: "#6B7280",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: "#D1D5DB",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioCircleSelected: { borderColor: "#D64545" },
+  radioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: "#D64545",
+  },
+
   ctaContainer: {
     backgroundColor: "#FAFBF8",
     paddingHorizontal: 20,
@@ -662,37 +827,39 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "center",
-    padding: 24,
+    padding: 20,
   },
   rejectModal: {
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     padding: 20,
-    gap: 12,
+    gap: 10,
+    maxHeight: "90%",
   },
   rejectModalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
     color: "#23302A",
     fontFamily: "Sora",
   },
   rejectModalText: {
-    fontSize: 13,
+    fontSize: 12,
     color: "#6B7A70",
     fontFamily: "Plus Jakarta Sans",
-    lineHeight: 19,
+    lineHeight: 17,
   },
   rejectInput: {
     borderWidth: 1,
     borderColor: "#DCE3D8",
     borderRadius: 12,
-    padding: 12,
-    minHeight: 88,
+    padding: 10,
+    minHeight: 60,
     color: "#23302A",
     textAlignVertical: "top",
     fontFamily: "Plus Jakarta Sans",
+    fontSize: 12,
   },
-  modalActions: { flexDirection: "row", gap: 10 },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
   modalCancel: {
     flex: 1,
     alignItems: "center",
