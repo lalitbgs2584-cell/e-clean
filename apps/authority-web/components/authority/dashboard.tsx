@@ -12,7 +12,6 @@ import {
   Download,
   FileWarning,
   Filter,
-  ImagePlus,
   Leaf,
   LocateFixed,
   MapPinned,
@@ -20,6 +19,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  UserCheck,
   UserPlus,
   Users,
   X,
@@ -48,13 +48,26 @@ import {
 } from "./shared";
 import { ReportTimeline } from "./report-timeline";
 import { MapCommandCenter } from "./map-command-center";
+import { CitizensTable } from "./CitizensTable";
+import { AuthoritiesTable } from "./AuthoritiesTable";
+import { WorkersTable } from "./WorkersTable";
+import { CreateUserModal } from "./CreateUserModal";
+import { EvidenceGallery } from "./EvidenceGallery";
+import {
+  FiltersPanel,
+  EMPTY_FILTERS,
+  type ReportFilters,
+} from "./FiltersPanel";
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 type Page =
   | "Overview"
   | "Reports"
   | "Map & Locations"
   | "Assignments"
   | "Workers"
+  | "Authorities"
+  | "Citizens"
   | "Verification"
   | "Disputes"
   | "Analytics"
@@ -67,6 +80,8 @@ const NAVIGATION: Array<{ label: Page; icon: LucideIcon }> = [
   { label: "Map & Locations", icon: LocateFixed },
   { label: "Assignments", icon: ClipboardCheck },
   { label: "Workers", icon: Users },
+  { label: "Authorities", icon: ShieldCheck },
+  { label: "Citizens", icon: UserCheck },
   { label: "Verification", icon: ShieldCheck },
   { label: "Disputes", icon: AlertTriangle },
   { label: "Analytics", icon: BarChart3 },
@@ -89,16 +104,7 @@ const REPORT_TABS = [
 
 type ModalState = { action: ReportActionType; reportId: string } | null;
 
-function pillTone(value: "green" | "amber" | "red" | "gray" | "mint") {
-  return value === "green"
-    ? "mint"
-    : value === "gray"
-      ? "gray"
-      : value === "red"
-        ? "red"
-        : "amber";
-}
-
+// ── Shared UI ─────────────────────────────────────────────────────────────────
 function Pill({
   children,
   tone = "mint",
@@ -106,9 +112,20 @@ function Pill({
   children: ReactNode;
   tone?: "green" | "amber" | "red" | "gray" | "mint";
 }) {
-  return <span className={`pill ${pillTone(tone)}`}>{children}</span>;
+  const cls =
+    tone === "green"
+      ? "mint"
+      : tone === "red"
+        ? "red"
+        : tone === "amber"
+          ? "amber"
+          : tone === "gray"
+            ? "gray"
+            : "mint";
+  return <span className={`pill ${cls}`}>{children}</span>;
 }
 
+// ── MetricGrid ────────────────────────────────────────────────────────────────
 function MetricGrid({ payload }: { payload: AuthorityDashboardPayload }) {
   const items = [
     [
@@ -156,6 +173,88 @@ function MetricGrid({ payload }: { payload: AuthorityDashboardPayload }) {
   );
 }
 
+// ── PeopleOverview ────────────────────────────────────────────────────────────
+function PeopleOverview({
+  payload,
+  onNavigateCitizens,
+  onNavigateWorkers,
+  onNavigateAuthorities,
+}: {
+  payload: AuthorityDashboardPayload;
+  onNavigateCitizens: (filter: "ALL" | "ACTIVE" | "BLOCKED") => void;
+  onNavigateWorkers: (filter: "ALL" | "ACTIVE" | "BLOCKED" | "STRIKED") => void;
+  onNavigateAuthorities: () => void;
+}) {
+  const people = payload.people;
+  if (!people) return null;
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          People & Moderation
+        </h3>
+      </div>
+      <div className="metrics" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+        <article
+          className="metric"
+          onClick={() => onNavigateCitizens("ALL")}
+          style={{ cursor: "pointer" }}
+        >
+          <p>Total Citizens</p>
+          <h2>{people.totalCitizens}</h2>
+          <small className="up" style={{ color: "var(--green)" }}>• Registered citizens →</small>
+        </article>
+        <article
+          className="metric"
+          onClick={() => onNavigateWorkers("ALL")}
+          style={{ cursor: "pointer" }}
+        >
+          <p>Total Workers</p>
+          <h2>{people.totalWorkers}</h2>
+          <small className="up" style={{ color: "var(--green)" }}>• Field personnel →</small>
+        </article>
+        <article
+          className="metric"
+          onClick={onNavigateAuthorities}
+          style={{ cursor: "pointer" }}
+        >
+          <p>Authority Staff</p>
+          <h2>{people.totalAuthorityStaff}</h2>
+          <small className="up">• Municipal admins →</small>
+        </article>
+        <article
+          className="metric"
+          onClick={() => onNavigateCitizens("BLOCKED")}
+          style={{ cursor: "pointer" }}
+        >
+          <p>Blocked Citizens</p>
+          <h2 style={{ color: people.blockedCitizens > 0 ? "var(--red)" : "inherit" }}>
+            {people.blockedCitizens}
+          </h2>
+          <small style={{ color: people.blockedCitizens > 0 ? "var(--red)" : "var(--muted)" }}>
+            • Inactive/suspended →
+          </small>
+        </article>
+        <article
+          className="metric"
+          onClick={() => onNavigateWorkers("STRIKED")}
+          style={{ cursor: "pointer" }}
+        >
+          <p>Striked / Blocked Workers</p>
+          <h2 style={{ color: people.blockedOrStrikedWorkers > 0 ? "var(--amber)" : "inherit" }}>
+            {people.blockedOrStrikedWorkers}
+          </h2>
+          <small style={{ color: people.blockedOrStrikedWorkers > 0 ? "var(--amber)" : "var(--muted)" }}>
+            • Needs attention →
+          </small>
+        </article>
+      </div>
+    </div>
+  );
+}
+
+// ── BarChart ──────────────────────────────────────────────────────────────────
 function BarChart({
   series,
   title,
@@ -196,21 +295,22 @@ function BarChart({
   );
 }
 
+// ── MapCanvas ─────────────────────────────────────────────────────────────────
 function MapCanvas({
   reports,
   onOpen,
 }: {
   reports: AuthorityReport[];
-  onOpen: (report: AuthorityReport) => void;
+  onOpen: (r: AuthorityReport) => void;
 }) {
-  const latitudes = reports.map((report) => report.latitude);
-  const longitudes = reports.map((report) => report.longitude);
-  const minLat = Math.min(...latitudes, 0);
-  const maxLat = Math.max(...latitudes, 1);
-  const minLng = Math.min(...longitudes, 0);
-  const maxLng = Math.max(...longitudes, 1);
-  const scale = (value: number, min: number, max: number) =>
-    max === min ? 50 : ((value - min) / (max - min)) * 100;
+  const latitudes = reports.map((r) => r.latitude);
+  const longitudes = reports.map((r) => r.longitude);
+  const minLat = Math.min(...latitudes, 0),
+    maxLat = Math.max(...latitudes, 1);
+  const minLng = Math.min(...longitudes, 0),
+    maxLng = Math.max(...longitudes, 1);
+  const scale = (v: number, min: number, max: number) =>
+    max === min ? 50 : ((v - min) / (max - min)) * 100;
 
   return (
     <div className="map-canvas operational-map">
@@ -238,6 +338,7 @@ function MapCanvas({
   );
 }
 
+// ── ReportTable ───────────────────────────────────────────────────────────────
 function ReportTable({
   title,
   subtitle,
@@ -245,13 +346,15 @@ function ReportTable({
   onOpen,
   onAction,
   emptyLabel,
+  onFilters,
 }: {
   title: string;
   subtitle: string;
   reports: AuthorityReport[];
-  onOpen: (report: AuthorityReport) => void;
-  onAction?: (report: AuthorityReport) => void;
+  onOpen: (r: AuthorityReport) => void;
+  onAction?: (r: AuthorityReport) => void;
   emptyLabel: string;
+  onFilters?: () => void;
 }) {
   return (
     <article className="card table-card">
@@ -260,9 +363,11 @@ function ReportTable({
           <h2>{title}</h2>
           <p>{subtitle}</p>
         </div>
-        <button className="button ghost">
-          <Filter size={15} /> Filters
-        </button>
+        {onFilters && (
+          <button className="button ghost" onClick={onFilters}>
+            <Filter size={15} /> Filters
+          </button>
+        )}
       </div>
       <div className="table-wrap">
         <table>
@@ -367,20 +472,22 @@ function ReportTable({
   );
 }
 
+// ── ReportDrawer ──────────────────────────────────────────────────────────────
 function ReportDrawer({
   report,
   onClose,
   onOpenAction,
+  token,
 }: {
   report: AuthorityReport;
   onClose: () => void;
   onOpenAction: (action: ReportActionType) => void;
+  token: string | null;
 }) {
   const currentStep = Math.max(
     0,
-    report.timeline.findIndex((step) => step.state === "current"),
+    report.timeline.findIndex((s) => s.state === "current"),
   );
-
   return (
     <div className="overlay">
       <aside className="drawer">
@@ -393,6 +500,8 @@ function ReportDrawer({
             <X />
           </button>
         </header>
+
+        {/* Hero image — first REPORT type */}
         <div
           className={`detail-image ${report.attention === "URGENT" ? "orange" : report.status === "DISPUTED" ? "teal" : "green"}`}
           style={{
@@ -403,9 +512,10 @@ function ReportDrawer({
           }}
         >
           {report.images.find((img) => img.type === "REPORT")?.url ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={report.images.find((img) => img.type === "REPORT")!.url!}
-              alt="Citizen report image"
+              alt="Citizen report"
               style={{
                 width: "100%",
                 height: "100%",
@@ -417,6 +527,7 @@ function ReportDrawer({
             "Citizen report image · GPS verified"
           )}
         </div>
+
         <section>
           <div className="detail-heading">
             <h3>Report information</h3>
@@ -443,6 +554,7 @@ function ReportDrawer({
             </dd>
           </dl>
         </section>
+
         <section className="ai-assessment">
           <span>
             <ShieldCheck size={17} /> AI assessment ·{" "}
@@ -455,6 +567,7 @@ function ReportDrawer({
             {report.recommendedAction ?? "Authority review"}.
           </p>
         </section>
+
         <section>
           <h3>Status timeline</h3>
           <ReportTimeline steps={buildTimeline(report.status)} />
@@ -465,43 +578,13 @@ function ReportDrawer({
               : "Submitted"}
           </p>
         </section>
+
+        {/* Full evidence gallery */}
         <section>
           <h3>Evidence</h3>
-          <div className="evidence-grid">
-            <div className="evidence-shot before">
-              {report.images[0]?.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={report.images[0].url}
-                  alt="Reported waste"
-                  loading="lazy"
-                />
-              ) : null}
-              <span className="evidence-label">Before</span>
-              <small>
-                {report.images[0]
-                  ? formatCompactDate(report.images[0].createdAt)
-                  : "Citizen upload"}
-              </small>
-            </div>
-            <div className="evidence-shot after">
-              {report.cleanup?.afterImage?.url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={report.cleanup.afterImage.url}
-                  alt="After cleanup"
-                  loading="lazy"
-                />
-              ) : null}
-              <span className="evidence-label">After</span>
-              <small>
-                {report.cleanup?.afterImage
-                  ? formatCompactDate(report.cleanup.afterImage.createdAt)
-                  : "Awaiting cleanup"}
-              </small>
-            </div>
-          </div>
+          <EvidenceGallery report={report} token={token} />
         </section>
+
         <footer>
           <button className="button ghost" onClick={onClose}>
             Close
@@ -551,6 +634,7 @@ function ReportDrawer({
   );
 }
 
+// ── ActionModal ───────────────────────────────────────────────────────────────
 function ActionModal({
   report,
   action,
@@ -573,9 +657,9 @@ function ActionModal({
   selectedWorkerId: string;
   selectedDuplicateId: string;
   note: string;
-  setNote: (value: string) => void;
-  setSelectedWorkerId: (value: string) => void;
-  setSelectedDuplicateId: (value: string) => void;
+  setNote: (v: string) => void;
+  setSelectedWorkerId: (v: string) => void;
+  setSelectedDuplicateId: (v: string) => void;
   onClose: () => void;
   onSubmit: () => void;
   pending: boolean;
@@ -632,12 +716,12 @@ function ActionModal({
         </span>
         <h2>{titles[action][0]}</h2>
         <p>{titles[action][1]}</p>
-        {action === "assign" ? (
+        {action === "assign" && (
           <div className="worker-choices">
             {workers.map((worker) => (
               <button
-                className={selectedWorkerId === worker.id ? "chosen" : ""}
                 key={worker.id}
+                className={selectedWorkerId === worker.id ? "chosen" : ""}
                 onClick={() => setSelectedWorkerId(worker.id)}
               >
                 <span>
@@ -661,8 +745,8 @@ function ActionModal({
               </span>
             </div>
           </div>
-        ) : null}
-        {action === "link_duplicate" ? (
+        )}
+        {action === "link_duplicate" && (
           <div className="duplicate-card">
             <b>Pick the report to link</b>
             <p>
@@ -672,20 +756,20 @@ function ActionModal({
             <select
               className="select"
               value={selectedDuplicateId}
-              onChange={(event) => setSelectedDuplicateId(event.target.value)}
+              onChange={(e) => setSelectedDuplicateId(e.target.value)}
             >
               <option value="">Choose a linked report</option>
               {reports
-                .filter((item) => item.id !== report.id)
+                .filter((r) => r.id !== report.id)
                 .slice(0, 12)
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.id} · {item.location ?? item.zone ?? "Nearby report"}
+                .map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.id} · {r.location ?? r.zone ?? "Nearby report"}
                   </option>
                 ))}
             </select>
           </div>
-        ) : null}
+        )}
         {(action === "mark_verified" ||
           action === "mark_disputed" ||
           action === "approve_cleanup") && (
@@ -699,7 +783,7 @@ function ActionModal({
               Decision note
               <input
                 value={note}
-                onChange={(event) => setNote(event.target.value)}
+                onChange={(e) => setNote(e.target.value)}
                 placeholder="Optional comment for the record"
               />
             </label>
@@ -740,39 +824,7 @@ function ActionModal({
   );
 }
 
-function LoadingState() {
-  return (
-    <main className="auth-loading">
-      <LoaderCircle size={25} /> Checking secure session…
-    </main>
-  );
-}
-
-function AccessDenied({
-  email,
-  onSignOut,
-}: {
-  email: string;
-  onSignOut: () => void;
-}) {
-  return (
-    <main
-      className="auth-loading"
-      style={{ gap: 14, textAlign: "center", padding: 24 }}
-    >
-      <ShieldCheck size={28} />
-      <strong>Authority access required</strong>
-      <span>
-        {email} is signed in, but the account is not provisioned for the
-        authority workspace.
-      </span>
-      <button className="button primary" onClick={onSignOut}>
-        Sign out
-      </button>
-    </main>
-  );
-}
-
+// ── Hotspots ──────────────────────────────────────────────────────────────────
 function Hotspots({ payload }: { payload: AuthorityDashboardPayload }) {
   return (
     <article className="card category-card">
@@ -799,15 +851,15 @@ function Hotspots({ payload }: { payload: AuthorityDashboardPayload }) {
   );
 }
 
+// ── ZonePanel (Map & Locations legacy) ───────────────────────────────────────
 function ZonePanel({
   payload,
   onOpen,
 }: {
   payload: AuthorityDashboardPayload;
-  onOpen: (report: AuthorityReport) => void;
+  onOpen: (r: AuthorityReport) => void;
 }) {
   const topZone = payload.zones[0];
-
   return (
     <div className="map-page">
       <article className="card map-card">
@@ -858,31 +910,50 @@ function ZonePanel({
               ["Avg. resolution", "n/a"],
             ]
         ).map(([label, value]) => (
-          <div className="info-row" key={label}>
+          <div className="info-row" key={label as string}>
             <span>{label}</span>
             <b>{value}</b>
           </div>
         ))}
-        {payload.reports[0] ? (
+        {payload.reports[0] && (
           <button
             className="button primary"
             onClick={() => onOpen(payload.reports[0]!)}
           >
             Review top report
           </button>
-        ) : null}
+        )}
       </aside>
     </div>
   );
 }
 
+// ── NotificationsPanel ────────────────────────────────────────────────────────
 function NotificationsPanel({
   payload,
+  token,
   onOpen,
 }: {
   payload: AuthorityDashboardPayload;
-  onOpen: (report: AuthorityReport) => void;
+  token: string | null;
+  onOpen: (r: AuthorityReport) => void;
 }) {
+  const [marking, setMarking] = useState(false);
+  const [markedAll, setMarkedAll] = useState(false);
+
+  const handleMarkAll = async () => {
+    if (!token) return;
+    setMarking(true);
+    try {
+      await authorityApi.markAllNotificationsRead(token);
+      setMarkedAll(true);
+    } finally {
+      setMarking(false);
+    }
+  };
+
+  const notifications = payload.notifications;
+
   return (
     <article className="card notification-page">
       <div className="card-title">
@@ -890,46 +961,87 @@ function NotificationsPanel({
           <h2>Notification center</h2>
           <p>Latest authority events, disputes, and approvals.</p>
         </div>
-        <button className="button ghost">Mark all read</button>
+        <button
+          className="button ghost"
+          onClick={handleMarkAll}
+          disabled={marking || markedAll}
+        >
+          {markedAll ? "All read ✓" : marking ? "Marking…" : "Mark all read"}
+        </button>
       </div>
-      {payload.notifications.map((notification) => (
-        <div className="notification-item" key={notification.id}>
-          <Pill
-            tone={notification.report.attention === "URGENT" ? "red" : "amber"}
-          >
-            {notification.type.replaceAll("_", " ")}
-          </Pill>
-          <div>
-            <b>{notification.title}</b>
-            <p>
-              {notification.message ?? notification.report.id} ·{" "}
-              {formatRelativeTime(notification.createdAt)}
-            </p>
-          </div>
-          <button
-            className="more"
-            onClick={() => {
-              const target =
-                payload.reports.find(
-                  (report) => report.id === notification.reportId,
-                ) ?? payload.reports[0];
-              if (target) onOpen(target);
-            }}
-          >
-            Open
-          </button>
+      {notifications.length === 0 ? (
+        <div className="empty-hint">
+          <span>No notifications yet.</span>
         </div>
-      ))}
+      ) : (
+        notifications.map((n) => (
+          <div
+            className="notification-item"
+            key={n.id}
+            style={{ opacity: n.isRead && !markedAll ? 0.6 : 1 }}
+          >
+            <Pill tone={n.report?.attention === "URGENT" ? "red" : "amber"}>
+              {n.type.replaceAll("_", " ")}
+            </Pill>
+            <div>
+              <b>{n.title}</b>
+              <p>
+                {n.message ?? n.reportId} · {formatRelativeTime(n.createdAt)}
+              </p>
+            </div>
+            <button
+              className="more"
+              onClick={() => {
+                const target =
+                  payload.reports.find((r) => r.id === n.reportId) ??
+                  payload.reports[0];
+                if (target) onOpen(target);
+              }}
+            >
+              Open
+            </button>
+          </div>
+        ))
+      )}
     </article>
   );
 }
 
+// ── SettingsPanel ─────────────────────────────────────────────────────────────
 function SettingsPanel({
   sessionUser,
+  token,
 }: {
   sessionUser: { name: string; email: string };
+  token: string | null;
 }) {
   const [active, setActive] = useState("Profile");
+  const [name, setName] = useState(sessionUser.name);
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!token || !name.trim()) return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      await authorityApi.updateProfile(token, { name: name.trim() });
+      setSaveMsg("Changes saved.");
+    } catch {
+      setSaveMsg("Save failed — please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const COMING_SOON_TABS = [
+    "Organization",
+    "Notifications",
+    "Security",
+    "Audit logs",
+  ];
+  const isComingSoon = COMING_SOON_TABS.includes(active);
+
   return (
     <div className="settings-layout">
       <aside className="settings-nav">
@@ -943,7 +1055,10 @@ function SettingsPanel({
         ].map((item) => (
           <button
             key={item}
-            onClick={() => setActive(item)}
+            onClick={() => {
+              setActive(item);
+              setSaveMsg(null);
+            }}
             className={active === item ? "active" : ""}
           >
             {item}
@@ -955,6 +1070,16 @@ function SettingsPanel({
         {active === "Roles & Permissions" ? (
           <>
             <p>Assign dashboard capabilities by municipal role.</p>
+            <small
+              style={{
+                display: "block",
+                marginBottom: 12,
+                color: "var(--muted)",
+                fontSize: 12,
+              }}
+            >
+              This table is for reference only and is non-editable.
+            </small>
             <table className="permission-table">
               <thead>
                 <tr>
@@ -986,21 +1111,56 @@ function SettingsPanel({
               </tbody>
             </table>
           </>
-        ) : (
-          <>
-            <p>
-              Update your {active.toLowerCase()} configuration for the authority
-              portal.
+        ) : isComingSoon ? (
+          <div
+            style={{
+              padding: "40px 0",
+              textAlign: "center",
+              color: "var(--muted)",
+            }}
+          >
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🚧</div>
+            <p style={{ fontWeight: 600, fontSize: 15, margin: "0 0 6px" }}>
+              Coming soon
             </p>
+            <p style={{ fontSize: 13, margin: 0 }}>
+              {active} configuration will be available in a future release.
+            </p>
+          </div>
+        ) : (
+          /* Profile tab */
+          <>
+            <p>Update your profile for the authority portal.</p>
             <label className="setting-field">
               Authority name
-              <input defaultValue={sessionUser.name} />
+              <input value={name} onChange={(e) => setName(e.target.value)} />
             </label>
             <label className="setting-field">
               Email
-              <input defaultValue={sessionUser.email} />
+              <input
+                defaultValue={sessionUser.email}
+                disabled
+                style={{ opacity: 0.6 }}
+              />
             </label>
-            <button className="button primary">Save changes</button>
+            {saveMsg && (
+              <p
+                style={{
+                  fontSize: 13,
+                  color: saveMsg.includes("failed") ? "#D64545" : "#2E7D4F",
+                  margin: "4px 0 0",
+                }}
+              >
+                {saveMsg}
+              </p>
+            )}
+            <button
+              className="button primary"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </button>
           </>
         )}
       </article>
@@ -1008,452 +1168,220 @@ function SettingsPanel({
   );
 }
 
-function AddUserModal({
-  zones,
+// ── DisputesPanel ─────────────────────────────────────────────────────────────
+function DisputesPanel({
+  reports,
+  onOpen,
+  onAction,
   token,
-  onClose,
-  onSuccess,
 }: {
-  zones: AuthorityDashboardPayload["zones"];
+  reports: AuthorityReport[];
+  onOpen: (r: AuthorityReport) => void;
+  onAction: (r: AuthorityReport) => void;
   token: string | null;
-  onClose: () => void;
-  onSuccess: () => void;
 }) {
-  const [role, setRole] = useState<"WORKER" | "AUTHORITY">("WORKER");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [zone, setZone] = useState("");
-  const [phone, setPhone] = useState("");
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !email.trim() || !password) {
-      setError("Please fill in full name, email, and password.");
-      return;
-    }
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (!token) {
-      setError("Authentication required.");
-      return;
-    }
-
-    setError(null);
-    setPending(true);
-
+  const handleResolve = async (
+    report: AuthorityReport,
+    decision: "CLEAN" | "NOT_CLEAN",
+  ) => {
+    if (!token) return;
+    setResolving(report.id + decision);
+    setResolveError(null);
     try {
-      await authorityApi.createUser(token, {
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        password,
-        role,
-        zone: zone.trim() || undefined,
-        phone: phone.trim() || undefined,
-      });
-      onSuccess();
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to create user.");
+      await authorityApi.resolveDispute(token, report.id, decision);
+    } catch (err) {
+      setResolveError(
+        err instanceof AuthorityApiError ? err.message : "Action failed.",
+      );
     } finally {
-      setPending(false);
+      setResolving(null);
     }
   };
 
   return (
-    <div className="overlay modal-overlay">
-      <div
-        className="modal workflow-modal"
-        style={{
-          maxWidth: 580,
-          width: "92%",
-          maxHeight: "88vh",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <button className="modal-close" onClick={onClose} disabled={pending}>
-          <X size={19} />
-        </button>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            marginBottom: 6,
-          }}
-        >
-          <span className="modal-icon" style={{ margin: 0 }}>
-            {role === "WORKER" ? (
-              <Users size={22} />
-            ) : (
-              <ShieldCheck size={22} />
-            )}
-          </span>
-          <div>
-            <h2 style={{ fontSize: 18, margin: 0 }}>
-              {role === "WORKER"
-                ? "Provision Field Worker"
-                : "Provision Authority Officer"}
-            </h2>
-            <p
-              style={{ margin: "2px 0 0", fontSize: 12, color: "var(--muted)" }}
-            >
-              {role === "WORKER"
-                ? "Creates credentials for mobile field worker app access."
-                : "Creates credentials for authority web command center access."}
-            </p>
-          </div>
-        </div>
-
-        <form
-          onSubmit={handleSubmit}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            marginTop: 12,
-          }}
-        >
-          {/* Role selector pill toggle */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 8,
-              padding: 4,
-              background: "var(--surface-subtle, #f5f8f5)",
-              borderRadius: 10,
-              border: "1px solid var(--border-color, #dce3d8)",
-            }}
-          >
-            <button
-              type="button"
-              className={`button ${role === "WORKER" ? "primary" : "ghost"}`}
-              style={{
-                padding: "7px 12px",
-                fontSize: 12,
-                justifyContent: "center",
-              }}
-              onClick={() => setRole("WORKER")}
-            >
-              <Users size={14} style={{ marginRight: 6 }} /> Field Worker
-            </button>
-            <button
-              type="button"
-              className={`button ${role === "AUTHORITY" ? "primary" : "ghost"}`}
-              style={{
-                padding: "7px 12px",
-                fontSize: 12,
-                justifyContent: "center",
-              }}
-              onClick={() => setRole("AUTHORITY")}
-            >
-              <ShieldCheck size={14} style={{ marginRight: 6 }} /> Authority
-              Officer
-            </button>
-          </div>
-
-          {/* Row 1: Name & Email */}
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
-          >
-            <label className="setting-field" style={{ margin: 0 }}>
-              Full Name *
-              <input
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={
-                  role === "WORKER" ? "Ramesh Kumar" : "Officer Sharma"
-                }
-              />
-            </label>
-
-            <label className="setting-field" style={{ margin: 0 }}>
-              Email Address *
-              <input
-                required
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={
-                  role === "WORKER" ? "worker@eclean.in" : "officer@city.gov"
-                }
-              />
-            </label>
-          </div>
-
-          {/* Row 2: Password & Phone */}
-          <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
-          >
-            <label className="setting-field" style={{ margin: 0 }}>
-              Initial Password *
-              <input
-                required
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min. 8 characters"
-              />
-            </label>
-
-            <label className="setting-field" style={{ margin: 0 }}>
-              Contact Phone (Optional)
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="+91 98765 43210"
-              />
-            </label>
-          </div>
-
-          {/* Row 3: Zone */}
-          <label className="setting-field" style={{ margin: 0 }}>
-            Assigned Ward / Zone (Optional)
-            <input
-              value={zone}
-              onChange={(e) => setZone(e.target.value)}
-              placeholder="e.g. Ward 12, Green Park"
-              list="zones-datalist"
-            />
-            <datalist id="zones-datalist">
-              {zones.map((z) => (
-                <option key={z.zone} value={z.zone} />
-              ))}
-            </datalist>
-          </label>
-
-          {error && (
-            <div
-              style={{
-                color: "#D64545",
-                backgroundColor: "#FFF2F2",
-                border: "1px solid #FFCDD2",
-                padding: "8px 12px",
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          <div className="modal-actions" style={{ marginTop: 4 }}>
-            <button
-              type="button"
-              className="button ghost"
-              onClick={onClose}
-              disabled={pending}
-            >
-              Cancel
-            </button>
-            <button type="submit" className="button primary" disabled={pending}>
-              {pending
-                ? "Creating..."
-                : role === "WORKER"
-                  ? "Create Worker Account"
-                  : "Create Authority Account"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-function WorkerAvatar({ worker }: { worker: AuthorityWorker }) {
-  const initials =
-    worker.name
-      .split(/\s+/)
-      .map((p) => p[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "W";
-
-  if (worker.profileImageUrl) {
-    return (
-      <img
-        src={worker.profileImageUrl}
-        alt={worker.name}
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: "50%",
-          objectFit: "cover",
-          border: "1px solid var(--border, #DCE3D8)",
-        }}
-      />
-    );
-  }
-
-  return (
-    <div
-      style={{
-        width: 36,
-        height: 36,
-        borderRadius: "50%",
-        background: "#E8F0E5",
-        color: "#2E7D4F",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontWeight: 700,
-        fontSize: 13,
-      }}
-      title="No official photo assigned"
-    >
-      {initials}
-    </div>
-  );
-}
-
-function WorkersPanel({
-  payload,
-  onAddUser,
-}: {
-  payload: AuthorityDashboardPayload;
-  onAddUser: () => void;
-}) {
-  const { token } = useAuthoritySession();
-  const assignImage = useAssignWorkerProfileImageMutation(token);
-  const [assignError, setAssignError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pendingWorkerId, setPendingWorkerId] = useState<string | null>(null);
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !pendingWorkerId) return;
-    if (!file.type.startsWith("image/")) {
-      setAssignError("Please choose an image file.");
-      return;
-    }
-    setAssignError(null);
-    assignImage.mutate(
-      { workerId: pendingWorkerId, file },
-      {
-        onError: (err: Error) => {
-          setAssignError(err.message || "Could not assign worker photo.");
-        },
-      },
-    );
-  };
-
-  const startAssign = (workerId: string) => {
-    setPendingWorkerId(workerId);
-    fileInputRef.current?.click();
-  };
-
-  return (
-    <article className="card table-card">
-      <div className="card-title">
-        <div>
-          <h2>Field workforce</h2>
-          <p>
-            Availability, workload, and operational performance. Official worker
-            photos are managed here — workers cannot change their own photo.
-          </p>
-        </div>
-        <button className="button primary" onClick={onAddUser}>
-          <UserPlus size={16} style={{ marginRight: 6 }} />
-          Add member
-        </button>
-      </div>
-      {assignError ? (
-        <p style={{ color: "#D64545", margin: "0 0 12px", fontSize: 13 }}>
-          {assignError}
+    <div>
+      {resolveError && (
+        <p style={{ color: "#D64545", marginBottom: 12, fontSize: 13 }}>
+          {resolveError}
         </p>
-      ) : null}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg"
-        style={{ display: "none" }}
-        onChange={handleFile}
-      />
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Worker</th>
-              <th>Status</th>
-              <th>Current zone</th>
-              <th>Active assignments</th>
-              <th>Completed today</th>
-              <th>Specialties</th>
-              <th>Photo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payload.workers.map((worker) => (
-              <tr key={worker.id}>
-                <td>
-                  <div
-                    style={{ display: "flex", alignItems: "center", gap: 10 }}
-                  >
-                    <WorkerAvatar worker={worker} />
-                    <div>
-                      <b>{worker.name}</b>
-                      <small className="cell-sub">{worker.email}</small>
-                    </div>
-                  </div>
-                </td>
-                <td>
-                  <Pill tone={worker.available ? "mint" : "amber"}>
-                    {worker.available ? "Available" : "Busy"}
-                  </Pill>
-                </td>
-                <td>{worker.zone ?? "Unzoned"}</td>
-                <td>{worker.activeAssignments}</td>
-                <td>{worker.completedToday}</td>
-                <td>
-                  {worker.specialties.length
-                    ? worker.specialties.join(", ")
-                    : "General cleanup"}
-                </td>
-                <td>
-                  {worker.imageAssignedBy ? (
-                    <small className="cell-sub" style={{ display: "block" }}>
-                      Assigned by {worker.imageAssignedBy.name}
-                      {worker.imageAssignedAt
-                        ? ` · ${formatRelativeTime(worker.imageAssignedAt)}`
-                        : ""}
-                    </small>
-                  ) : (
-                    <small className="cell-sub">No official photo</small>
-                  )}
-                  <button
-                    className="button ghost"
-                    style={{ padding: "4px 8px", fontSize: 12, marginTop: 4 }}
-                    disabled={assignImage.isPending}
-                    onClick={() => startAssign(worker.id)}
-                  >
-                    <ImagePlus size={14} style={{ marginRight: 4 }} />
-                    {worker.image ? "Replace photo" : "Assign photo"}
-                  </button>
-                </td>
+      )}
+      <article className="card table-card">
+        <div className="card-title">
+          <div>
+            <h2>Citizen disputes</h2>
+            <p>Open disputes that need evidence review or re-dispatch.</p>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Report</th>
+                <th>Citizen</th>
+                <th>Zone</th>
+                <th>Community review</th>
+                <th>Votes</th>
+                <th>Closes</th>
+                <th>Action</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </article>
+            </thead>
+            <tbody>
+              {reports.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>
+                    <div className="empty-hint">
+                      <span>No citizens have disputed a cleanup yet.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                reports.map((report) => {
+                  const isInconclusive =
+                    report.communityReviewStatus === "INCONCLUSIVE";
+                  const hasCommunityReview = !!report.communityReviewStatus;
+                  return (
+                    <tr key={report.id}>
+                      <td>
+                        <b>{report.id}</b>
+                        <small className="cell-sub">
+                          {report.wasteCategory ?? "Unknown"}
+                        </small>
+                      </td>
+                      <td>{report.citizen.name}</td>
+                      <td>{report.zone ?? "Unzoned"}</td>
+                      <td>
+                        {hasCommunityReview ? (
+                          <span
+                            className={`pill ${
+                              report.communityReviewStatus === "CONFIRMED_CLEAN"
+                                ? "mint"
+                                : report.communityReviewStatus ===
+                                    "CONFIRMED_DIRTY"
+                                  ? "red"
+                                  : report.communityReviewStatus ===
+                                      "INCONCLUSIVE"
+                                    ? "amber"
+                                    : "gray"
+                            }`}
+                          >
+                            {report.communityReviewStatus?.replace(/_/g, " ")}
+                          </span>
+                        ) : (
+                          <span className="pill gray">No review</span>
+                        )}
+                      </td>
+                      <td>
+                        {report.communityVoteTally ? (
+                          <span style={{ fontSize: 12 }}>
+                            ✓ {report.communityVoteTally.clean} / ✗{" "}
+                            {report.communityVoteTally.notClean}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>
+                        {report.communityReviewClosesAt
+                          ? formatRelativeTime(report.communityReviewClosesAt)
+                          : "—"}
+                      </td>
+                      <td
+                        style={{
+                          display: "flex",
+                          gap: 6,
+                          flexWrap: "wrap",
+                          minWidth: 160,
+                        }}
+                      >
+                        <button
+                          className="more"
+                          onClick={() => {
+                            onOpen(report);
+                            onAction(report);
+                          }}
+                        >
+                          Open
+                        </button>
+                        {(isInconclusive || report.status === "DISPUTED") && (
+                          <>
+                            <button
+                              className="button primary"
+                              style={{ padding: "3px 8px", fontSize: 11 }}
+                              disabled={resolving !== null}
+                              onClick={() => handleResolve(report, "CLEAN")}
+                            >
+                              {resolving === report.id + "CLEAN"
+                                ? "…"
+                                : "Confirm clean"}
+                            </button>
+                            <button
+                              className="button ghost"
+                              style={{ padding: "3px 8px", fontSize: 11 }}
+                              disabled={resolving !== null}
+                              onClick={() => handleResolve(report, "NOT_CLEAN")}
+                            >
+                              {resolving === report.id + "NOT_CLEAN"
+                                ? "…"
+                                : "Confirm dirty"}
+                            </button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
   );
 }
 
+// ── Loading / Access states ───────────────────────────────────────────────────
+function LoadingState() {
+  return (
+    <main className="auth-loading">
+      <LoaderCircle size={25} /> Checking secure session…
+    </main>
+  );
+}
+function AccessDenied({
+  email,
+  onSignOut,
+}: {
+  email: string;
+  onSignOut: () => void;
+}) {
+  return (
+    <main
+      className="auth-loading"
+      style={{ gap: 14, textAlign: "center", padding: 24 }}
+    >
+      <ShieldCheck size={28} />
+      <strong>Authority access required</strong>
+      <span>
+        {email} is signed in, but the account is not provisioned for the
+        authority workspace.
+      </span>
+      <button className="button primary" onClick={onSignOut}>
+        Sign out
+      </button>
+    </main>
+  );
+}
+
+// ── AuthorityDashboard (main shell) ──────────────────────────────────────────
 export default function AuthorityDashboard() {
   const router = useRouter();
   const { data: session, isPending, token, user } = useAuthoritySession();
   const dashboardQuery = useAuthorityDashboardQuery(token);
   const actionMutation = useReportActionMutation(token);
+
   const [page, setPage] = useState<Page>("Overview");
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<(typeof REPORT_TABS)[number]>("All");
@@ -1464,6 +1392,13 @@ export default function AuthorityDashboard() {
   const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [selectedDuplicateId, setSelectedDuplicateId] = useState("");
   const [note, setNote] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [reportFilters, setReportFilters] =
+    useState<ReportFilters>(EMPTY_FILTERS);
+  const [citizenStatusFilter, setCitizenStatusFilter] =
+    useState<"ALL" | "ACTIVE" | "BLOCKED">("ALL");
+  const [workerStatusFilter, setWorkerStatusFilter] =
+    useState<"ALL" | "ACTIVE" | "BLOCKED" | "STRIKED">("ALL");
 
   useEffect(() => {
     const error = dashboardQuery.error;
@@ -1478,10 +1413,12 @@ export default function AuthorityDashboard() {
     }
   }, [dashboardQuery.data?.reports, selectedReportId]);
 
-  const payload = dashboardQuery.data;
+  const rawPayload = dashboardQuery.data;
+  const payload: AuthorityDashboardPayload | undefined =
+    (rawPayload as any)?.data ?? rawPayload;
   const reports = payload?.reports ?? [];
   const selectedReport = useMemo(
-    () => reports.find((report) => report.id === selectedReportId) ?? null,
+    () => reports.find((r) => r.id === selectedReportId) ?? null,
     [reports, selectedReportId],
   );
 
@@ -1506,34 +1443,61 @@ export default function AuthorityDashboard() {
           : tab === "Pending"
             ? ["PENDING", "AI_ASSESSED"].includes(report.status)
             : report.status === tab;
-      return haystack.includes(query.toLowerCase()) && tabMatches;
+      const fZone = !reportFilters.zone || report.zone === reportFilters.zone;
+      const fCategory =
+        !reportFilters.category ||
+        report.wasteCategory === reportFilters.category;
+      const fStatus =
+        !reportFilters.status || report.status === reportFilters.status;
+      const fAttention =
+        !reportFilters.attention ||
+        report.attention === reportFilters.attention;
+      const fWorker = !reportFilters.workerId
+        ? true
+        : reportFilters.workerId === "__none__"
+          ? !report.cleanup?.worker
+          : report.cleanup?.worker?.id === reportFilters.workerId;
+      const fFrom =
+        !reportFilters.from ||
+        new Date(report.createdAt) >= new Date(reportFilters.from);
+      const fTo =
+        !reportFilters.to ||
+        new Date(report.createdAt) <= new Date(reportFilters.to + "T23:59:59");
+      return (
+        haystack.includes(query.toLowerCase()) &&
+        tabMatches &&
+        fZone &&
+        fCategory &&
+        fStatus &&
+        fAttention &&
+        fWorker &&
+        fFrom &&
+        fTo
+      );
     });
-  }, [query, reports, tab]);
+  }, [query, reports, tab, reportFilters]);
 
   const urgentReports = useMemo(
-    () => reports.filter((report) => report.attention === "URGENT").slice(0, 4),
+    () => reports.filter((r) => r.attention === "URGENT").slice(0, 4),
     [reports],
   );
   const reviewReports = useMemo(
     () =>
       reports
         .filter(
-          (report) =>
-            report.status === "CLEANUP_COMPLETED" ||
-            (report.status === "RESOLVED" && !report.verification),
+          (r) =>
+            r.status === "CLEANUP_COMPLETED" ||
+            (r.status === "RESOLVED" && !r.verification),
         )
         .slice(0, 8),
     [reports],
   );
   const disputedReports = useMemo(
-    () => reports.filter((report) => report.status === "DISPUTED").slice(0, 8),
+    () => reports.filter((r) => r.status === "DISPUTED").slice(0, 20),
     [reports],
   );
   const openAssignments = useMemo(
-    () =>
-      reports.filter((report) =>
-        ["ASSIGNED", "IN_PROGRESS"].includes(report.status),
-      ),
+    () => reports.filter((r) => ["ASSIGNED", "IN_PROGRESS"].includes(r.status)),
     [reports],
   );
 
@@ -1543,9 +1507,7 @@ export default function AuthorityDashboard() {
   };
 
   useEffect(() => {
-    if (selectedReportId && !selectedReport) {
-      setDrawerOpen(false);
-    }
+    if (selectedReportId && !selectedReport) setDrawerOpen(false);
   }, [selectedReport, selectedReportId]);
 
   if (isPending || !session || dashboardQuery.isPending)
@@ -1591,50 +1553,30 @@ export default function AuthorityDashboard() {
     setSelectedReportId(report.id);
     setDrawerOpen(true);
   };
-
   const openAction = (action: ReportActionType) => {
     if (!selectedReport) return;
     setModal({ action, reportId: selectedReport.id });
     setSelectedWorkerId(
       selectedReport.cleanup?.worker?.id ??
-        payload.workers.find((worker) => worker.available)?.id ??
+        payload.workers.find((w) => w.available)?.id ??
         payload.workers[0]?.id ??
         "",
     );
     setSelectedDuplicateId(
       selectedReport.duplicateOfId ??
         reports.find(
-          (report) =>
-            report.id !== selectedReport.id &&
-            report.zone === selectedReport.zone,
+          (r) => r.id !== selectedReport.id && r.zone === selectedReport.zone,
         )?.id ??
         "",
     );
     setNote("");
   };
 
-  const submitAction = async () => {
-    if (!modal) return;
-    await actionMutation.mutateAsync({
-      reportId: modal.reportId,
-      action: modal.action,
-      workerId: modal.action === "assign" ? selectedWorkerId : undefined,
-      duplicateOfId:
-        modal.action === "link_duplicate" ? selectedDuplicateId : undefined,
-      verificationResult:
-        modal.action === "mark_verified"
-          ? "VERIFIED"
-          : modal.action === "mark_disputed"
-            ? "DISPUTED"
-            : undefined,
-      note,
-    });
-    setModal(null);
-    setNote("");
-  };
+  const unreadCount = (payload?.notifications ?? []).filter((n) => !n.isRead).length;
 
   return (
     <main className="app-shell">
+      {/* Sidebar */}
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">
@@ -1650,14 +1592,10 @@ export default function AuthorityDashboard() {
               onClick={() => setPage(label)}
               className={`nav-link ${page === label ? "active" : ""}`}
             >
-              <Icon size={18} />
-              {label}
-              {label === "Notifications" &&
-              payload.notifications.some((item) => !item.isRead) ? (
-                <b>
-                  {payload.notifications.filter((item) => !item.isRead).length}
-                </b>
-              ) : null}
+              <Icon size={18} /> {label}
+              {label === "Notifications" && unreadCount > 0 && (
+                <b>{unreadCount}</b>
+              )}
             </button>
           ))}
         </nav>
@@ -1679,13 +1617,15 @@ export default function AuthorityDashboard() {
           </button>
         </div>
       </aside>
+
+      {/* Content */}
       <section className="content">
         <header className="topbar">
           <label className="global-search">
             <Search size={18} />
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder="Search reports, workers, zones, and evidence..."
             />
           </label>
@@ -1696,13 +1636,14 @@ export default function AuthorityDashboard() {
               onClick={() => setPage("Notifications")}
             >
               <Bell size={19} />
-              {payload.notifications.some((item) => !item.isRead) && <em />}
+              {unreadCount > 0 && <em />}
             </button>
             <div className="header-avatar">
               {session.user.name.slice(0, 2).toUpperCase()}
             </div>
           </div>
         </header>
+
         <div className="page">
           <div className="page-heading">
             <div>
@@ -1722,25 +1663,38 @@ export default function AuthorityDashboard() {
               </button>
               <button
                 className="button ghost"
-                onClick={() => router.push("/register")}
+                onClick={() => setAddUserOpen(true)}
               >
-                <Users size={16} /> Add authority
+                <UserPlus size={16} /> Add member
               </button>
-              {page === "Reports" ? (
+              {page === "Reports" && (
                 <button
                   className="button primary"
                   onClick={() => setTab("Pending")}
                 >
                   Review queue <span>{payload.metrics.reviewQueue}</span>
                 </button>
-              ) : null}
+              )}
             </div>
           </div>
 
           <MetricGrid payload={payload} />
 
-          {page === "Overview" ? (
+          {/* ── Overview ── */}
+          {page === "Overview" && (
             <>
+              <PeopleOverview
+                payload={payload}
+                onNavigateCitizens={(f) => {
+                  setCitizenStatusFilter(f);
+                  setPage("Citizens");
+                }}
+                onNavigateWorkers={(f) => {
+                  setWorkerStatusFilter(f);
+                  setPage("Workers");
+                }}
+                onNavigateAuthorities={() => setPage("Authorities")}
+              />
               <div className="operations-grid">
                 <article className="card map-card">
                   <div className="card-title">
@@ -1863,9 +1817,10 @@ export default function AuthorityDashboard() {
                 <Hotspots payload={payload} />
               </section>
             </>
-          ) : null}
+          )}
 
-          {page === "Reports" ? (
+          {/* ── Reports ── */}
+          {page === "Reports" && (
             <>
               <div className="tab-bar">
                 {REPORT_TABS.map((item) => (
@@ -1885,18 +1840,28 @@ export default function AuthorityDashboard() {
                 onOpen={openReport}
                 onAction={openReport}
                 emptyLabel="No reports matched your current search or filter."
+                onFilters={() => setFiltersOpen(true)}
               />
+              {filtersOpen && (
+                <FiltersPanel
+                  filters={reportFilters}
+                  onChange={setReportFilters}
+                  onClose={() => setFiltersOpen(false)}
+                  zones={payload.zones}
+                  workers={payload.workers}
+                />
+              )}
             </>
-          ) : null}
+          )}
 
-          {page === "Map & Locations" ? (
+          {page === "Map & Locations" && (
             <MapCommandCenter
               payload={payload}
               onOpen={openReport}
               token={token}
             />
-          ) : null}
-          {page === "Assignments" ? (
+          )}
+          {page === "Assignments" && (
             <ReportTable
               title="Cleanup assignments"
               subtitle="Track work currently waiting on worker dispatch or escalation."
@@ -1905,14 +1870,25 @@ export default function AuthorityDashboard() {
               onAction={openReport}
               emptyLabel="No assignments are waiting right now."
             />
-          ) : null}
-          {page === "Workers" ? (
-            <WorkersPanel
-              payload={payload}
+          )}
+          {page === "Workers" && (
+            <WorkersTable
               onAddUser={() => setAddUserOpen(true)}
+              initialStatusFilter={workerStatusFilter}
             />
-          ) : null}
-          {page === "Verification" ? (
+          )}
+          {page === "Authorities" && <AuthoritiesTable />}
+          {page === "Citizens" && (
+            <CitizensTable
+              token={token}
+              initialStatusFilter={citizenStatusFilter}
+              onViewReports={(citizenId) => {
+                setQuery(citizenId);
+                setPage("Reports");
+              }}
+            />
+          )}
+          {page === "Verification" && (
             <ReportTable
               title="Cleanup review queue"
               subtitle="These cleanups are waiting for authority approval or citizen verification."
@@ -1930,21 +1906,18 @@ export default function AuthorityDashboard() {
               }}
               emptyLabel="Nothing is waiting for verification review."
             />
-          ) : null}
-          {page === "Disputes" ? (
-            <ReportTable
-              title="Citizen disputes"
-              subtitle="Open disputes that need evidence review or re-dispatch."
+          )}
+          {page === "Disputes" && (
+            <DisputesPanel
               reports={disputedReports}
               onOpen={openReport}
-              onAction={(report) => {
-                openReport(report);
-                setModal({ action: "mark_disputed", reportId: report.id });
-              }}
-              emptyLabel="No citizens have disputed a cleanup yet."
+              onAction={(report) =>
+                setModal({ action: "mark_disputed", reportId: report.id })
+              }
+              token={token}
             />
-          ) : null}
-          {page === "Analytics" ? (
+          )}
+          {page === "Analytics" && (
             <section className="analytics">
               <BarChart
                 title="Submission trend"
@@ -1979,30 +1952,38 @@ export default function AuthorityDashboard() {
               </article>
               <Hotspots payload={payload} />
             </section>
-          ) : null}
-          {page === "Notifications" ? (
-            <NotificationsPanel payload={payload} onOpen={openReport} />
-          ) : null}
-          {page === "Settings" ? (
+          )}
+          {page === "Notifications" && (
+            <NotificationsPanel
+              payload={payload}
+              token={token}
+              onOpen={openReport}
+            />
+          )}
+          {page === "Settings" && (
             <SettingsPanel
               sessionUser={{
                 name: session.user.name,
                 email: session.user.email,
               }}
+              token={token}
             />
-          ) : null}
+          )}
         </div>
       </section>
-      {drawerOpen && selectedReport ? (
+
+      {/* Overlays */}
+      {drawerOpen && selectedReport && (
         <ReportDrawer
           report={selectedReport}
           onClose={() => setDrawerOpen(false)}
           onOpenAction={(action) =>
             setModal({ action, reportId: selectedReport.id })
           }
+          token={token}
         />
-      ) : null}
-      {modal && selectedReport ? (
+      )}
+      {modal && selectedReport && (
         <ActionModal
           report={selectedReport}
           action={modal.action}
@@ -2038,9 +2019,9 @@ export default function AuthorityDashboard() {
           }}
           pending={actionMutation.isPending}
         />
-      ) : null}
-      {addUserOpen ? (
-        <AddUserModal
+      )}
+      {addUserOpen && (
+        <CreateUserModal
           zones={payload.zones}
           token={token}
           onClose={() => setAddUserOpen(false)}
@@ -2049,7 +2030,7 @@ export default function AuthorityDashboard() {
             dashboardQuery.refetch();
           }}
         />
-      ) : null}
+      )}
     </main>
   );
 }

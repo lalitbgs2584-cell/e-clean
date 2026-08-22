@@ -94,7 +94,26 @@ enum ReportImageType {
   BEFORE_CLEANUP // worker's before photo
   AFTER_CLEANUP // worker's after photo
   NO_WASTE_PROOF
+  DISPUTE_EVIDENCE
   COLLECTION_PROOF // recycling partner's proof of pickup
+}
+
+enum CommunityReviewStatus {
+  PENDING
+  CONFIRMED_DIRTY
+  CONFIRMED_CLEAN
+  INCONCLUSIVE
+}
+
+enum CommunityVoteChoice {
+  CLEAN
+  NOT_CLEAN
+}
+
+enum NotificationAudience {
+  CITIZEN
+  WORKER
+  AUTHORITY
 }
 
 enum CleanupStatus {
@@ -141,6 +160,15 @@ enum NotificationType {
   ACCOUNT_BLOCKED
   ACCOUNT_UNBLOCKED
   REPORT_NO_WASTE_FOUND
+  COMMUNITY_VERIFICATION_REQUEST
+  DISPUTE_CONFIRMED_DIRTY
+  DISPUTE_REJECTED_BY_COMMUNITY
+  CLEANUP_DISPUTE_UPHELD
+  IMAGE_FLAGGED_FOR_REVIEW
+  NEW_REPORT_NEEDS_ASSIGNMENT
+  DISPUTE_OPENED
+  WORKER_AUTO_BLOCKED
+  WORKER_MANUALLY_BLOCKED
 }
 
 // -------------------------
@@ -165,6 +193,7 @@ model User {
   workerLongitude Float?
   workerLastSeenAt DateTime?
   wrongReportsCount Int @default(0)
+  workerStrikeCount Int @default(0)
   blockedAt DateTime?
   blockedReason String?
 
@@ -208,6 +237,7 @@ model User {
   cleanupsDone     Cleanup[]            @relation("WorkerCleanups")
   pointTransactions PointTransaction[]
   weeklyAwards WeeklyAward[]
+  communityVotes CommunityVote[]
 
   @@index([role])
   @@index([zone])
@@ -281,6 +311,11 @@ model Report {
   littererGender LittererGender?
   littererApproxAge String?
   littererClothingDescription String?
+  communityReviewStatus CommunityReviewStatus?
+  communityReviewOpensAt DateTime?
+  communityReviewClosesAt DateTime?
+  flaggedForManualReview Boolean @default(false)
+  flagReason String?
 
   // ---- location ----
   // latitude/longitude are plain columns so Prisma can read/write them
@@ -345,6 +380,7 @@ model Report {
   verification  ReportVerification?
   notifications Notification[]
   pointTransactions PointTransaction[]
+  communityVotes CommunityVote[]
 
   @@index([userId])
   @@index([status])
@@ -355,6 +391,7 @@ model Report {
   @@index([zone])
   @@index([recyclingPartnerId])
   @@index([createdAt])
+  @@index([communityReviewStatus, communityReviewClosesAt])
   @@map("reports")
 }
 
@@ -422,6 +459,9 @@ model ReportImage {
   storagePath String
   mediaType   MediaType       @default(PHOTO)
   type        ReportImageType @default(REPORT)
+  isSuspectedAIGenerated Boolean?
+  aiGeneratedConfidence Float?
+  authenticityCheckedAt DateTime?
 
   createdAt DateTime @default(now())
 
@@ -436,6 +476,22 @@ model ReportImage {
   @@index([uploadedBy])
   @@index([type])
   @@map("report_images")
+}
+
+model CommunityVote {
+  id String @id @default(cuid())
+  reportId String
+  voterId String
+  vote CommunityVoteChoice
+  distanceMeters Float
+  createdAt DateTime @default(now())
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  voter User @relation(fields: [voterId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, voterId])
+  @@index([voterId])
+  @@map("community_votes")
 }
 
 // -------------------------
@@ -532,20 +588,22 @@ model ReportVerification {
 model Notification {
   id String @id @default(uuid())
 
-  userId   String // always the citizen who filed the report
+  userId   String?
   reportId String?
 
   type    NotificationType
+  audience NotificationAudience @default(CITIZEN)
   title   String
   message String?
   isRead  Boolean          @default(false)
 
   createdAt DateTime @default(now())
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
   report Report? @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead])
+  @@index([audience, isRead])
   @@index([reportId])
   @@map("notifications")
 }

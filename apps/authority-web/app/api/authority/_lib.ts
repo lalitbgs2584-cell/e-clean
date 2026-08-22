@@ -22,7 +22,9 @@ import {
 import { cdnUrl, profileImageUrl } from "./_s3";
 
 function getBearerToken(request: Request) {
-  const authHeader = request.headers.get("authorization") ?? request.headers.get("Authorization");
+  const authHeader =
+    request.headers.get("authorization") ??
+    request.headers.get("Authorization");
   if (!authHeader) return null;
 
   const [scheme, token] = authHeader.split(" ");
@@ -42,7 +44,9 @@ type AuthorityDbSession = {
   } & Record<string, unknown>;
 } | null;
 
-async function getSessionFromRequest(request: Request): Promise<AuthorityDbSession> {
+async function getSessionFromRequest(
+  request: Request,
+): Promise<AuthorityDbSession> {
   const token = getBearerToken(request);
 
   if (!token) {
@@ -70,7 +74,9 @@ type AuthoritySessionGate = {
   response: NextResponse | null;
 };
 
-export async function requireAuthenticatedSession(request: Request): Promise<AuthoritySessionGate> {
+export async function requireAuthenticatedSession(
+  request: Request,
+): Promise<AuthoritySessionGate> {
   const session = await getSessionFromRequest(request);
 
   if (!session?.user) {
@@ -83,7 +89,9 @@ export async function requireAuthenticatedSession(request: Request): Promise<Aut
   return { session, response: null };
 }
 
-export async function requireAuthoritySession(request: Request): Promise<AuthoritySessionGate> {
+export async function requireAuthoritySession(
+  request: Request,
+): Promise<AuthoritySessionGate> {
   const authResult = await requireAuthenticatedSession(request);
   if (authResult.response) return authResult;
 
@@ -165,6 +173,7 @@ function serializeMedia(media: any): AuthorityMedia {
     url: cdnUrl(media.storagePath),
     mediaType: media.mediaType,
     createdAt: toIso(media.createdAt) ?? new Date().toISOString(),
+    isSuspectedAIGenerated: media.isSuspectedAIGenerated ?? null,
   };
 }
 
@@ -197,6 +206,9 @@ function serializeCleanup(cleanup: any): AuthorityCleanup | null {
       ? serializeMedia(cleanup.beforeImage)
       : null,
     afterImage: cleanup.afterImage ? serializeMedia(cleanup.afterImage) : null,
+    noWasteImage: cleanup.noWasteImage
+      ? serializeMedia(cleanup.noWasteImage)
+      : null,
   };
 }
 
@@ -281,6 +293,21 @@ export function serializeReport(report: any): AuthorityReport {
       cleanup: serializeCleanup(report.cleanup),
       verification: serializeVerification(report.verification),
     }),
+    communityReviewStatus: report.communityReviewStatus ?? null,
+    communityReviewOpensAt: toIso(report.communityReviewOpensAt),
+    communityReviewClosesAt: toIso(report.communityReviewClosesAt),
+    flaggedForManualReview: report.flaggedForManualReview ?? false,
+    communityVoteTally:
+      report._count?.communityVotes != null
+        ? {
+            clean: (report.communityVotes ?? []).filter(
+              (v: any) => v.vote === "CLEAN",
+            ).length,
+            notClean: (report.communityVotes ?? []).filter(
+              (v: any) => v.vote === "NOT_CLEAN",
+            ).length,
+          }
+        : null,
   };
 }
 
@@ -383,7 +410,7 @@ function buildZones(reports: AuthorityReport[]): AuthorityZone[] {
     );
 }
 
-function buildWorkers(workers: any[]): any[] {
+export function buildWorkers(workers: any[]): any[] {
   return workers.map((worker) => {
     const cleanups = worker.cleanupsDone ?? [];
     const activeAssignments = cleanups.filter(
@@ -415,6 +442,10 @@ function buildWorkers(workers: any[]): any[] {
       ),
     ].slice(0, 3);
 
+    const completedCount = cleanups.filter(
+      (cleanup: any) => cleanup.status === "COMPLETED",
+    ).length;
+
     return {
       id: worker.id,
       name: worker.name,
@@ -426,6 +457,10 @@ function buildWorkers(workers: any[]): any[] {
       imageAssignedAt: toIso(worker.profileImageAssignedAt),
       isActive: worker.isActive,
       available: worker.isActive && activeAssignments < 2,
+      workerStrikeCount: worker.workerStrikeCount ?? 0,
+      blockedAt: toIso(worker.blockedAt),
+      blockedReason: worker.blockedReason ?? null,
+      completedCount,
       workload: activeAssignments,
       completedToday,
       activeAssignments,
@@ -436,7 +471,15 @@ function buildWorkers(workers: any[]): any[] {
 }
 
 export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload> {
-  const [rawReports, rawWorkers, notifications, rawRecyclingPartners, topCitizen] = await Promise.all([
+  const [
+    rawReports,
+    rawWorkers,
+    notifications,
+    rawRecyclingPartners,
+    topCitizen,
+    userGroups,
+    strikedActiveWorkers,
+  ] = await Promise.all([
     prisma.report.findMany({
       orderBy: { createdAt: "desc" },
       take: 120,
@@ -444,12 +487,14 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
         user: true,
         images: true,
         recyclingPartner: true,
+        communityVotes: { select: { vote: true } },
         cleanup: {
           include: {
             worker: true,
             assignedByRef: true,
             beforeImage: true,
             afterImage: true,
+            noWasteImage: true,
           },
         },
         verification: {
@@ -498,6 +543,7 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
       },
     }),
     prisma.notification.findMany({
+      where: { audience: "AUTHORITY" },
       orderBy: { createdAt: "desc" },
       take: 12,
       include: {
@@ -524,7 +570,40 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
         },
       },
     }),
+    prisma.user.groupBy({
+      by: ["role", "isActive"],
+      _count: { _all: true },
+    }),
+    prisma.user.count({
+      where: { role: "WORKER", isActive: true, workerStrikeCount: { gt: 0 } },
+    }),
   ]);
+
+  let totalCitizens = 0;
+  let blockedCitizens = 0;
+  let totalWorkers = 0;
+  let blockedWorkers = 0;
+  let totalAuthorityStaff = 0;
+
+  for (const group of userGroups) {
+    if (group.role === "CITIZEN") {
+      totalCitizens += group._count._all;
+      if (!group.isActive) blockedCitizens += group._count._all;
+    } else if (group.role === "WORKER") {
+      totalWorkers += group._count._all;
+      if (!group.isActive) blockedWorkers += group._count._all;
+    } else if (group.role === "AUTHORITY") {
+      totalAuthorityStaff += group._count._all;
+    }
+  }
+
+  const people = {
+    totalCitizens,
+    totalWorkers,
+    totalAuthorityStaff,
+    blockedCitizens,
+    blockedOrStrikedWorkers: blockedWorkers + strikedActiveWorkers,
+  };
 
   let personOfTheWeek: any = null;
   if (topCitizen) {
@@ -615,6 +694,7 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
       resolutionEfficiency,
     },
     personOfTheWeek,
+    people,
     reports,
     workers,
     zones,
@@ -630,12 +710,14 @@ export async function buildDashboardPayload(): Promise<AuthorityDashboardPayload
       isRead: notification.isRead,
       type: notification.type,
       reportId: notification.reportId,
-      report: {
-        id: notification.report.id,
-        status: notification.report.status,
-        zone: notification.report.zone ?? null,
-        attention: notification.report.attention,
-      },
+      report: notification.report
+        ? {
+            id: notification.report.id,
+            status: notification.report.status,
+            zone: notification.report.zone ?? null,
+            attention: notification.report.attention,
+          }
+        : null,
     })),
   };
 }

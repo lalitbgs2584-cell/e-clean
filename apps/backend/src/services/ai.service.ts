@@ -23,7 +23,12 @@ export const WASTE_CATEGORIES = [
   "OTHER",
 ] as const;
 
-export const WASTE_VOLUMES = ["SMALL", "MEDIUM", "LARGE", "VERY_LARGE"] as const;
+export const WASTE_VOLUMES = [
+  "SMALL",
+  "MEDIUM",
+  "LARGE",
+  "VERY_LARGE",
+] as const;
 
 export const TRUCK_SIZES = ["SMALL", "MEDIUM", "LARGE"] as const;
 
@@ -46,6 +51,8 @@ export interface WasteAssessment {
   severityScore: number;
   aiConfidence: number;
   description: string;
+  isLikelyAIGenerated: boolean;
+  aiGeneratedConfidence: number;
 }
 
 export const CATEGORY_LABELS: Record<string, string> = {
@@ -81,6 +88,8 @@ const assessmentSchema = {
     "severityScore",
     "aiConfidence",
     "description",
+    "isLikelyAIGenerated",
+    "aiGeneratedConfidence",
   ],
   properties: {
     dumpType: { type: "string", enum: [...DUMP_TYPES] },
@@ -94,6 +103,8 @@ const assessmentSchema = {
     severityScore: { type: "integer" },
     aiConfidence: { type: "integer" },
     description: { type: "string" },
+    isLikelyAIGenerated: { type: "boolean" },
+    aiGeneratedConfidence: { type: "number" },
   },
 };
 
@@ -111,6 +122,8 @@ Rules:
 - severityScore: 0-100 (0 trivial, 100 dangerous).
 - aiConfidence: your confidence 0-100 in the assessment.
 - description: write exactly 1-2 plain-language sentences describing the waste, its approximate size and the impact (smell, blocked path, health risk). It is shown to citizens and municipal reviewers. Do not mention the AI model.`;
+// Also assess whether imagery is likely synthetic/manipulated. This is a
+// review flag only: never reject a civic report solely from this estimate.`;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -121,8 +134,12 @@ function sanitizeAssessment(raw: any): WasteAssessment | null {
 
   return {
     dumpType: DUMP_TYPES.includes(raw.dumpType) ? raw.dumpType : "OTHER",
-    wasteCategory: WASTE_CATEGORIES.includes(raw.wasteCategory) ? raw.wasteCategory : "MIXED",
-    wasteVolume: WASTE_VOLUMES.includes(raw.wasteVolume) ? raw.wasteVolume : "MEDIUM",
+    wasteCategory: WASTE_CATEGORIES.includes(raw.wasteCategory)
+      ? raw.wasteCategory
+      : "MIXED",
+    wasteVolume: WASTE_VOLUMES.includes(raw.wasteVolume)
+      ? raw.wasteVolume
+      : "MEDIUM",
     truckSize: TRUCK_SIZES.includes(raw.truckSize) ? raw.truckSize : "MEDIUM",
     workersNeeded: clamp(Math.round(Number(raw.workersNeeded) || 2), 1, 8),
     recommendedAction: INTERVENTIONS.includes(raw.recommendedAction)
@@ -133,12 +150,88 @@ function sanitizeAssessment(raw: any): WasteAssessment | null {
     severityScore: clamp(Math.round(Number(raw.severityScore) || 50), 0, 100),
     aiConfidence: clamp(Math.round(Number(raw.aiConfidence) || 50), 0, 100),
     description: String(raw.description ?? "").slice(0, 500),
+    isLikelyAIGenerated: Boolean(raw.isLikelyAIGenerated),
+    aiGeneratedConfidence: clamp(Number(raw.aiGeneratedConfidence) || 0, 0, 1),
   };
+}
+
+export async function checkImageAuthenticity(image: {
+  base64: string;
+  mimeType: string;
+}) {
+  if (!config.openaiApiKey)
+    return { isLikelyAIGenerated: false, aiGeneratedConfidence: 0 };
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Assess whether this civic evidence photo appears AI-generated or materially synthetic. Return only JSON.",
+          },
+          {
+            role: "user",
+            content: [
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:${image.mimeType};base64,${image.base64}`,
+                },
+              },
+            ],
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "authenticity",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: ["isLikelyAIGenerated", "aiGeneratedConfidence"],
+              properties: {
+                isLikelyAIGenerated: { type: "boolean" },
+                aiGeneratedConfidence: {
+                  type: "number",
+                  minimum: 0,
+                  maximum: 1,
+                },
+              },
+            },
+          },
+        },
+      }),
+    });
+    if (!response.ok)
+      return { isLikelyAIGenerated: false, aiGeneratedConfidence: 0 };
+    const raw = JSON.parse(
+      ((await response.json()) as any).choices?.[0]?.message?.content ?? "{}",
+    );
+    return {
+      isLikelyAIGenerated: Boolean(raw.isLikelyAIGenerated),
+      aiGeneratedConfidence: clamp(
+        Number(raw.aiGeneratedConfidence) || 0,
+        0,
+        1,
+      ),
+    };
+  } catch {
+    return { isLikelyAIGenerated: false, aiGeneratedConfidence: 0 };
+  }
 }
 
 export async function assessWasteImages(
   images: { base64: string; mimeType: string }[],
-  hint?: string | null
+  hint?: string | null,
 ): Promise<WasteAssessment | null> {
   if (!config.openaiApiKey || images.length === 0) return null;
 
@@ -171,7 +264,11 @@ export async function assessWasteImages(
         ],
         response_format: {
           type: "json_schema",
-          json_schema: { name: "waste_assessment", strict: true, schema: assessmentSchema },
+          json_schema: {
+            name: "waste_assessment",
+            strict: true,
+            schema: assessmentSchema,
+          },
         },
       }),
     });
@@ -194,12 +291,13 @@ export async function assessWasteImages(
 
 export function fallbackAssessment(
   hint?: string | null,
-  location?: string | null
+  location?: string | null,
 ): WasteAssessment {
   const place = location ? ` near ${location.split("\n")[0]}` : "";
-  const description = hint && hint.trim().length > 0
-    ? hint.slice(0, 500)
-    : `Waste accumulation reported${place}. Needs municipal inspection and cleanup.`;
+  const description =
+    hint && hint.trim().length > 0
+      ? hint.slice(0, 500)
+      : `Waste accumulation reported${place}. Needs municipal inspection and cleanup.`;
 
   return {
     dumpType: "OTHER",
@@ -213,5 +311,7 @@ export function fallbackAssessment(
     severityScore: 50,
     aiConfidence: 0,
     description,
+    isLikelyAIGenerated: false,
+    aiGeneratedConfidence: 0,
   };
 }

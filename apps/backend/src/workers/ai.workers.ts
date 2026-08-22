@@ -39,11 +39,22 @@ export async function processAIClassificationJob(
     where: { id: job.reportId },
     select: { isLittererReport: true },
   });
+  const imageAuthenticity = assessment.aiGeneratedConfidence >= 0.7;
+  await prisma.reportImage.updateMany({
+    where: { reportId: job.reportId, type: "REPORT" },
+    data: {
+      isSuspectedAIGenerated: assessment.isLikelyAIGenerated,
+      aiGeneratedConfidence: assessment.aiGeneratedConfidence,
+      authenticityCheckedAt: new Date(),
+    },
+  });
   await prisma.report.update({
     where: { id: job.reportId },
     data: {
       status: "AI_ASSESSED",
-      dumpType: report?.isLittererReport ? "ILLEGAL_DUMPING" : assessment.dumpType,
+      dumpType: report?.isLittererReport
+        ? "ILLEGAL_DUMPING"
+        : assessment.dumpType,
       wasteCategory: assessment.wasteCategory,
       wasteVolume: assessment.wasteVolume,
       truckSize: assessment.truckSize,
@@ -54,8 +65,40 @@ export async function processAIClassificationJob(
       aiConfidence: assessment.aiConfidence,
       aiProcessedAt: new Date(),
       description: assessment.description,
+      flaggedForManualReview: imageAuthenticity,
+      flagReason: imageAuthenticity
+        ? "One or more report images may be AI-generated"
+        : null,
     },
   });
+  if (imageAuthenticity)
+    await prisma.notification.create({
+      data: {
+        audience: "AUTHORITY",
+        type: "IMAGE_FLAGGED_FOR_REVIEW",
+        title: "Image flagged for manual review",
+        message: `Report ${job.reportId} contains image evidence with elevated synthetic-image confidence.`,
+      },
+    });
+  const assignmentNotice = await prisma.notification.findFirst({
+    where: {
+      reportId: job.reportId,
+      audience: "AUTHORITY",
+      type: "NEW_REPORT_NEEDS_ASSIGNMENT",
+    },
+    select: { id: true },
+  });
+  if (!assignmentNotice) {
+    await prisma.notification.create({
+      data: {
+        reportId: job.reportId,
+        audience: "AUTHORITY",
+        type: "NEW_REPORT_NEEDS_ASSIGNMENT",
+        title: "New report ready for assignment",
+        message: `Report ${job.reportId} has been assessed and is ready for municipal assignment.`,
+      },
+    });
+  }
 
   const uiCategory = CATEGORY_LABELS[assessment.wasteCategory] || "Mixed Waste";
   const uiSeverity = severityFromScore(assessment.severityScore);

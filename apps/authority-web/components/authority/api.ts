@@ -1,6 +1,7 @@
 import type {
   AuthorityDashboardPayload,
   AuthorityReport,
+  AuthorityWorker,
   ReportActionType,
   VerificationResult,
 } from "./shared";
@@ -18,9 +19,12 @@ export class AuthorityApiError extends Error {
 async function parseJson<T>(response: Response): Promise<T> {
   const body = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new AuthorityApiError(body?.error ?? body?.message ?? "Request failed", response.status);
+    throw new AuthorityApiError(
+      body?.error ?? body?.message ?? "Request failed",
+      response.status,
+    );
   }
-  return (body?.data ?? body) as T;
+  return (body?.data !== undefined ? body.data : body) as T;
 }
 
 async function request<T>(path: string, token: string, init?: RequestInit) {
@@ -114,7 +118,8 @@ export const authorityApi = {
       params.set("attention", filters.attention);
     if (filters.category && filters.category !== "ALL")
       params.set("category", filters.category);
-    if (filters.zone && filters.zone !== "ALL") params.set("zone", filters.zone);
+    if (filters.zone && filters.zone !== "ALL")
+      params.set("zone", filters.zone);
     if (filters.from) params.set("from", filters.from);
     if (filters.to) params.set("to", filters.to);
     return `/api/authority/reports/export?${params.toString()}`;
@@ -163,11 +168,7 @@ export const authorityApi = {
       },
     );
   },
-  async assignWorkerProfileImage(
-    token: string,
-    workerId: string,
-    file: File,
-  ) {
+  async assignWorkerProfileImage(token: string, workerId: string, file: File) {
     const presign = await authorityApi.workerProfileImageUploadUrl(
       token,
       workerId,
@@ -211,7 +212,8 @@ export const authorityApi = {
       params.set("attention", filters.attention);
     if (filters.category && filters.category !== "ALL")
       params.set("category", filters.category);
-    if (filters.zone && filters.zone !== "ALL") params.set("zone", filters.zone);
+    if (filters.zone && filters.zone !== "ALL")
+      params.set("zone", filters.zone);
     if (filters.from) params.set("from", filters.from);
     if (filters.to) params.set("to", filters.to);
     const qs = params.toString();
@@ -249,5 +251,153 @@ export const authorityApi = {
         currentAssignment: { reportId: string; status: string } | null;
       }>;
     }>("/api/authority/map/workers", token);
+  },
+
+  // ── Phase 6: Citizens & Workers ─────────────────────────────────────────
+  listCitizens(
+    token: string,
+    params: { page?: number; limit?: number; search?: string } = {},
+  ) {
+    const qs = new URLSearchParams();
+    if (params.page) qs.set("page", String(params.page));
+    if (params.limit) qs.set("limit", String(params.limit));
+    if (params.search?.trim()) qs.set("search", params.search.trim());
+    const q = qs.toString();
+    return request<{
+      data: Array<{
+        id: string;
+        name: string;
+        email: string;
+        image: string | null;
+        isActive: boolean;
+        points: number;
+        wrongReportsCount: number;
+        blockedAt: string | null;
+        blockedReason: string | null;
+        createdAt: string;
+        reportCount: number;
+      }>;
+      pagination: { page: number; limit: number; total: number; pages: number };
+    }>(`/api/authority/citizens${q ? `?${q}` : ""}`, token);
+  },
+
+  setCitizenAction(
+    token: string,
+    id: string,
+    action: "block" | "unblock" | "reset_wrong_reports",
+    reason?: string,
+  ) {
+    return request<{ data: any }>(
+      `/api/authority/citizens/${id}`,
+      token,
+      { method: "PATCH", body: JSON.stringify({ action, reason }) },
+    );
+  },
+
+  setCitizenBlocked(
+    token: string,
+    id: string,
+    action: "block" | "unblock",
+    reason?: string,
+  ) {
+    return this.setCitizenAction(token, id, action, reason);
+  },
+
+  listWorkers(token: string) {
+    return request<{ data: AuthorityWorker[] }>(
+      "/api/authority/workers",
+      token,
+    );
+  },
+
+  setWorkerAction(
+    token: string,
+    id: string,
+    action: "block" | "unblock" | "reset_strikes",
+    reason?: string,
+  ) {
+    return request<{ data: any }>(
+      `/api/authority/workers/${id}`,
+      token,
+      { method: "PATCH", body: JSON.stringify({ action, reason }) },
+    );
+  },
+
+  listAuthorities(token: string) {
+    return request<{
+      data: Array<{
+        id: string;
+        name: string;
+        email: string;
+        zone: string | null;
+        isActive: boolean;
+        image: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>("/api/authority/authorities", token);
+  },
+
+  // ── Phase 10: Notifications ──────────────────────────────────────────────
+  listNotifications(token: string) {
+    return request<{
+      data: Array<{
+        id: string;
+        title: string;
+        message: string | null;
+        createdAt: string;
+        isRead: boolean;
+        type: string;
+        reportId: string | null;
+        report: {
+          id: string;
+          status: string;
+          zone: string | null;
+          attention: string;
+        } | null;
+      }>;
+    }>("/api/authority/notifications", token);
+  },
+
+  markAllNotificationsRead(token: string) {
+    return request<{ success: boolean }>(
+      "/api/authority/notifications/read-all",
+      token,
+      { method: "PATCH" },
+    );
+  },
+
+  // ── Phase 11: Settings ───────────────────────────────────────────────────
+  updateProfile(token: string, payload: { name: string }) {
+    return request<{ success: boolean; name: string }>(
+      "/api/authority/settings/profile",
+      token,
+      { method: "POST", body: JSON.stringify(payload) },
+    );
+  },
+
+  // ── Phase 12: Dispute resolution ─────────────────────────────────────────
+  resolveDispute(
+    token: string,
+    reportId: string,
+    decision: "CLEAN" | "NOT_CLEAN",
+  ) {
+    return request<{ success: boolean }>(
+      `/api/authority/reports/${reportId}/resolve-dispute`,
+      token,
+      { method: "POST", body: JSON.stringify({ decision }) },
+    );
+  },
+
+  resolveImageAuthenticity(
+    token: string,
+    reportId: string,
+    isAuthentic: boolean,
+  ) {
+    return request<{ success: boolean }>(
+      `/api/authority/reports/${reportId}/image-authenticity`,
+      token,
+      { method: "PATCH", body: JSON.stringify({ isAuthentic }) },
+    );
   },
 };

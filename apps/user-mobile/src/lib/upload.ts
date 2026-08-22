@@ -1,6 +1,6 @@
 import { config } from "@/config/env";
 
-export type ReportPhotoSlot = "original" | "support";
+export type ReportPhotoSlot = "original" | "support" | "dispute";
 
 interface PresignResponse {
   success: boolean;

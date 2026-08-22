@@ -39,6 +39,9 @@ export interface CitizenReport {
     result: "VERIFIED" | "DISPUTED";
     comment: string | null;
   } | null;
+  communityReviewClosesAt?: string | null;
+  voteCount?: number;
+  hasVoted?: boolean;
 }
 
 export interface CitizenNotification {
@@ -116,6 +119,9 @@ export const getMyReports = () =>
 export const getMyReport = (reportId: string) =>
   citizenRequest<CitizenReport>(`/api/reports/${reportId}`);
 
+export const getCommunityReviewReport = (reportId: string) =>
+  citizenRequest<CitizenReport>(`/api/reports/${reportId}/community-review`);
+
 export const getNotifications = () =>
   citizenRequest<CitizenNotification[]>("/api/notifications");
 
@@ -134,12 +140,21 @@ export const getMyRank = (scope: "all" | "month" = "all") =>
 export const verifyMyReport = (
   reportId: string,
   result: "VERIFIED" | "DISPUTED",
-  comment?: string,
+  evidence?: { comment?: string; evidenceImageKeys?: string[] },
 ) =>
   citizenRequest<CitizenReport>(`/api/reports/${reportId}/verification`, {
     method: "POST",
-    body: JSON.stringify({ result, comment }),
+    body: JSON.stringify({ result, ...evidence }),
   });
+
+export const submitCommunityVote = (
+  reportId: string,
+  vote: "CLEAN" | "NOT_CLEAN",
+) =>
+  citizenRequest<{ vote: "CLEAN" | "NOT_CLEAN" }>(
+    `/api/reports/${reportId}/community-vote`,
+    { method: "POST", body: JSON.stringify({ vote }) },
+  );
 
 export const upvoteReport = (reportId: string) =>
   citizenRequest<UpvoteResult>(`/api/reports/${reportId}/upvote`, {

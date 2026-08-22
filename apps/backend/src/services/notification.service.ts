@@ -17,8 +17,10 @@ type CreateNotificationInput = {
   message?: string | null;
 };
 
-export function createNotification(input: CreateNotificationInput) {
-  return prisma.notification.create({
+export async function createNotification(
+  input: CreateNotificationInput,
+): Promise<void> {
+  await prisma.notification.create({
     data: {
       userId: input.userId,
       reportId: input.reportId ?? null,

@@ -208,6 +208,10 @@ export function MapCommandCenter({
           center,
           zoom: validReports.length ? 11 : 2,
           attributionControl: true,
+          // OpenFreeMap's Liberty style can reference glyph stacks unavailable
+          // from some CDN edges. Rendering labels with a local system font keeps
+          // the operational map readable and avoids failed remote glyph requests.
+          localFontFamily: "Arial",
         });
         mapRef.current = map;
         map.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -400,12 +404,22 @@ export function MapCommandCenter({
       type: "FeatureCollection",
       features: workerFeatures,
     });
-    map.setPaintProperty("report-heat", "heatmap-opacity", heatmap ? 0.75 : 0);
-    map.setLayoutProperty(
-      "worker-points",
-      "visibility",
-      workers ? "visible" : "none",
-    );
+    // React effects may run between MapLibre's `load` event and style-layer
+    // insertion, or after a style reload. Only mutate layers that exist.
+    if (map.getLayer("report-heat")) {
+      map.setPaintProperty(
+        "report-heat",
+        "heatmap-opacity",
+        heatmap ? 0.75 : 0,
+      );
+    }
+    if (map.getLayer("worker-points")) {
+      map.setLayoutProperty(
+        "worker-points",
+        "visibility",
+        workers ? "visible" : "none",
+      );
+    }
   }, [filteredReports, heatmap, ready, remoteReports, workerFeatures, workers]);
   const fitReports = () => {
     const map = mapRef.current;

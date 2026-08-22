@@ -103,6 +103,7 @@ export default function RootLayout() {
           <Stack.Screen name="report-details" />
           <Stack.Screen name="report-submitted" />
           <Stack.Screen name="report-tracking/[id]" />
+          <Stack.Screen name="community-vote/[id]" />
           <Stack.Screen name="feedback/[id]" />
           <Stack.Screen name="map-view" />
           <Stack.Screen name="settings" />

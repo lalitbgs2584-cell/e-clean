@@ -9,6 +9,9 @@ export type ReportStatus =
   | "DISPUTED"
   | "CANCELLED";
 
+export type CommunityReviewStatus =
+  "PENDING" | "CONFIRMED_DIRTY" | "CONFIRMED_CLEAN" | "INCONCLUSIVE";
+
 export type AttentionLevel = "NORMAL" | "URGENT";
 export type CleanupStatus =
   | "ASSIGNED"
@@ -38,12 +41,19 @@ export type AuthorityTimelineStep = {
 
 export type AuthorityMedia = {
   id: string;
-  type: "REPORT" | "BEFORE_CLEANUP" | "AFTER_CLEANUP" | "COLLECTION_PROOF";
+  type:
+    | "REPORT"
+    | "BEFORE_CLEANUP"
+    | "AFTER_CLEANUP"
+    | "COLLECTION_PROOF"
+    | "DISPUTE_EVIDENCE"
+    | "NO_WASTE_PROOF";
   storagePath: string;
   /** CDN URL derived from storagePath (the single E-Clean distribution). */
   url: string | null;
   mediaType: "PHOTO" | "VIDEO";
   createdAt: string;
+  isSuspectedAIGenerated: boolean | null;
 };
 
 export type AuthorityUser = {
@@ -67,6 +77,7 @@ export type AuthorityCleanup = {
   assignedBy: AuthorityUser;
   beforeImage: AuthorityMedia | null;
   afterImage: AuthorityMedia | null;
+  noWasteImage: AuthorityMedia | null;
 };
 
 export type AuthorityVerification = {
@@ -158,6 +169,11 @@ export type AuthorityReport = {
   workerName: string;
   cleanupState: string;
   citizenVerificationState: string;
+  communityReviewStatus: CommunityReviewStatus | null;
+  communityReviewOpensAt: string | null;
+  communityReviewClosesAt: string | null;
+  flaggedForManualReview: boolean;
+  communityVoteTally: { clean: number; notClean: number } | null;
 };
 
 export type AuthorityWorker = {
@@ -171,6 +187,10 @@ export type AuthorityWorker = {
   imageAssignedAt: string | null;
   isActive: boolean;
   available: boolean;
+  workerStrikeCount?: number;
+  blockedAt?: string | null;
+  blockedReason?: string | null;
+  completedCount?: number;
   workload: number;
   completedToday: number;
   activeAssignments: number;
@@ -213,6 +233,13 @@ export type AuthorityDashboardPayload = {
   workers: AuthorityWorker[];
   zones: AuthorityZone[];
   recyclingPartners?: RecyclingPartnerRecord[];
+  people?: {
+    totalCitizens: number;
+    totalWorkers: number;
+    totalAuthorityStaff: number;
+    blockedCitizens: number;
+    blockedOrStrikedWorkers: number;
+  };
   charts: {
     dailyVolume: AuthorityChartSeries;
   };
@@ -223,13 +250,13 @@ export type AuthorityDashboardPayload = {
     createdAt: string;
     isRead: boolean;
     type: string;
-    reportId: string;
+    reportId: string | null;
     report: {
       id: string;
       status: ReportStatus;
       zone: string | null;
       attention: AttentionLevel;
-    };
+    } | null;
   }>;
 };
 
@@ -338,8 +365,10 @@ export function deriveCleanupState(report: AuthorityReport) {
   if (report.cleanup?.status === "COMPLETED")
     return "Waiting for citizen review";
   if (report.cleanup?.status === "IN_PROGRESS") return "Cleanup in progress";
-  if (report.cleanup?.status === "ACCEPTED") return "Worker accepted assignment";
-  if (report.cleanup?.status === "REJECTED") return "Worker declined assignment";
+  if (report.cleanup?.status === "ACCEPTED")
+    return "Worker accepted assignment";
+  if (report.cleanup?.status === "REJECTED")
+    return "Worker declined assignment";
   if (report.cleanup?.status === "ASSIGNED") return "Worker assigned";
   return "Awaiting assignment";
 }

@@ -38,7 +38,8 @@ export function useAuthoritySession(): {
   return {
     data,
     isPending: session.isPending,
-    error: (session as any).error instanceof Error ? (session as any).error : null,
+    error:
+      (session as any).error instanceof Error ? (session as any).error : null,
     token: data?.session?.token ?? null,
     user: data?.user ?? null,
   };
@@ -143,5 +144,35 @@ export function useMapWorkersQuery(token: string | null) {
     enabled: Boolean(token),
     staleTime: 30_000,
     refetchInterval: 30_000,
+  });
+}
+
+export function useCitizensQuery(
+  token: string | null,
+  params: { page?: number; limit?: number; search?: string } = {},
+) {
+  return useQuery({
+    queryKey: ["authority", "citizens", params],
+    queryFn: () => authorityApi.listCitizens(token as string, params),
+    enabled: Boolean(token),
+    staleTime: 30_000,
+  });
+}
+
+export function useWorkersQuery(token: string | null) {
+  return useQuery({
+    queryKey: ["authority", "workers"],
+    queryFn: () => authorityApi.listWorkers(token as string),
+    enabled: Boolean(token),
+    staleTime: 30_000,
+  });
+}
+
+export function useAuthoritiesQuery(token: string | null) {
+  return useQuery({
+    queryKey: ["authority", "authorities"],
+    queryFn: () => authorityApi.listAuthorities(token as string),
+    enabled: Boolean(token),
+    staleTime: 30_000,
   });
 }

@@ -18,4 +18,9 @@ export const config = {
     0,
     Number.parseInt(process.env.REPORT_IMAGE_POINTS || "1", 10) || 0,
   ),
+  communityReviewWindowHours: Math.max(
+    1,
+    Number.parseInt(process.env.COMMUNITY_REVIEW_WINDOW_HOURS || "24", 10) ||
+      24,
+  ),
 };

@@ -5,10 +5,12 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import client from "../services/s3.service";
 import {
+  disputeEvidenceImageKey,
   isExpectedStagingImageKey,
   stagingImageKey,
-  type ReportImageSlot,
+  type UploadImageSlot,
 } from "../services/report-images.service";
+import { prisma } from "db/client";
 
 const ALLOWED_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -28,15 +30,13 @@ export async function createPresignUrl(
     const { mime, reportId, slot } = req.body as {
       mime?: string;
       reportId?: string;
-      slot?: ReportImageSlot;
+      slot?: UploadImageSlot;
     };
     if (!mime || !reportId || !slot) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "mime, reportId, and slot are required",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "mime, reportId, and slot are required",
+      });
     }
     if (!isUuid(reportId)) {
       return res
@@ -45,14 +45,31 @@ export async function createPresignUrl(
     }
     if (
       !(mime in ALLOWED_TYPES) ||
-      (slot !== "original" && slot !== "support")
+      !["original", "support", "dispute"].includes(slot)
     ) {
       return res
         .status(400)
         .json({ success: false, error: "Invalid mime type" });
     }
-    const key = stagingImageKey(reportId, slot);
-    if (!isExpectedStagingImageKey(reportId, slot, key)) {
+
+    if (slot === "dispute") {
+      const ownedReport = await prisma.report.findFirst({
+        where: { id: reportId, userId: req.user?.id },
+        select: { id: true, status: true },
+      });
+      if (!ownedReport || ownedReport.status !== "RESOLVED") {
+        return res.status(403).json({
+          success: false,
+          error: "Only the reporting citizen can add dispute evidence",
+        });
+      }
+    }
+
+    const key =
+      slot === "dispute"
+        ? disputeEvidenceImageKey(reportId)
+        : stagingImageKey(reportId, slot);
+    if (slot !== "dispute" && !isExpectedStagingImageKey(reportId, slot, key)) {
       return res
         .status(400)
         .json({ success: false, error: "Invalid staging image key" });

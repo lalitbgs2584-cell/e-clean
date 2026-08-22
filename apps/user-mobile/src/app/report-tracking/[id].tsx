@@ -8,11 +8,15 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { getCdnUrl } from "@/lib/cdn";
+import { uploadReportPhoto } from "@/lib/upload";
+import { authClient } from "@/lib/auth-client";
 import {
   getMyReport,
   verifyMyReport,
@@ -41,6 +45,9 @@ export default function ReportTrackingScreen() {
   const [upvoting, setUpvoting] = useState(false);
   const [upvoted, setUpvoted] = useState(false);
   const [upvoteCount, setUpvoteCount] = useState(0);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeComment, setDisputeComment] = useState("");
+  const [disputePhotoUri, setDisputePhotoUri] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -80,11 +87,14 @@ export default function ReportTrackingScreen() {
     }
   };
 
-  const verify = async (result: "VERIFIED" | "DISPUTED") => {
+  const verify = async (
+    result: "VERIFIED" | "DISPUTED",
+    evidence?: { comment?: string; evidenceImageKeys?: string[] },
+  ) => {
     if (!report || actioning) return;
     setActioning(true);
     try {
-      const updated = await verifyMyReport(report.id, result);
+      const updated = await verifyMyReport(report.id, result, evidence);
       setReport(updated);
       showModal({
         variant: "success",
@@ -105,6 +115,54 @@ export default function ReportTrackingScreen() {
       });
     } finally {
       setActioning(false);
+    }
+  };
+
+  const pickDisputePhoto = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.8,
+      selectionLimit: 1,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setDisputePhotoUri(result.assets[0].uri);
+    }
+  };
+
+  const submitDispute = async () => {
+    if (!report || actioning) return;
+    const comment = disputeComment.trim();
+    if (!comment && !disputePhotoUri) {
+      showModal({
+        variant: "error",
+        title: "Add evidence",
+        message: "Please add a brief note or a photo showing the issue.",
+      });
+      return;
+    }
+    try {
+      let evidenceImageKeys: string[] | undefined;
+      if (disputePhotoUri) {
+        const session = await authClient.getSession();
+        evidenceImageKeys = [
+          await uploadReportPhoto({
+            reportId: report.id,
+            slot: "dispute",
+            fileUri: disputePhotoUri,
+            token: session.data?.session?.token,
+          }),
+        ];
+      }
+      await verify("DISPUTED", { comment, evidenceImageKeys });
+      setDisputeOpen(false);
+      setDisputeComment("");
+      setDisputePhotoUri(null);
+    } catch (error) {
+      showModal({
+        variant: "error",
+        title: "Could not upload evidence",
+        message: error instanceof Error ? error.message : "Please try again.",
+      });
     }
   };
 
@@ -159,10 +217,14 @@ export default function ReportTrackingScreen() {
               onPress={handleUpvote}
               disabled={upvoting}
             >
-              <Text style={[styles.upvoteIcon, upvoted && styles.upvoteIconActive]}>
+              <Text
+                style={[styles.upvoteIcon, upvoted && styles.upvoteIconActive]}
+              >
                 👍
               </Text>
-              <Text style={[styles.upvoteText, upvoted && styles.upvoteTextActive]}>
+              <Text
+                style={[styles.upvoteText, upvoted && styles.upvoteTextActive]}
+              >
                 {upvoteCount} {upvoteCount === 1 ? "Upvote" : "Upvotes"}
               </Text>
             </Pressable>
@@ -227,7 +289,7 @@ export default function ReportTrackingScreen() {
               <Pressable
                 style={styles.disputeButton}
                 disabled={actioning}
-                onPress={() => verify("DISPUTED")}
+                onPress={() => setDisputeOpen((current) => !current)}
               >
                 <Text style={styles.disputeText}>No, not clean</Text>
               </Pressable>
@@ -241,6 +303,45 @@ export default function ReportTrackingScreen() {
                 </Text>
               </Pressable>
             </View>
+            {disputeOpen ? (
+              <View style={styles.disputeEvidence}>
+                <Text style={styles.disputeEvidenceTitle}>
+                  What still needs attention?
+                </Text>
+                <TextInput
+                  value={disputeComment}
+                  onChangeText={setDisputeComment}
+                  placeholder="Briefly describe what is still unclean"
+                  placeholderTextColor="#748178"
+                  multiline
+                  style={styles.disputeInput}
+                />
+                <View style={styles.disputePhotoRow}>
+                  <Pressable
+                    style={styles.photoPicker}
+                    onPress={pickDisputePhoto}
+                  >
+                    <Text style={styles.photoPickerText}>
+                      {disputePhotoUri
+                        ? "Change photo"
+                        : "Add photo (optional)"}
+                    </Text>
+                  </Pressable>
+                  {disputePhotoUri ? (
+                    <Text style={styles.photoAttached}>Photo attached</Text>
+                  ) : null}
+                </View>
+                <Pressable
+                  style={styles.submitDisputeButton}
+                  disabled={actioning}
+                  onPress={submitDispute}
+                >
+                  <Text style={styles.submitDisputeText}>
+                    {actioning ? "Submitting…" : "Submit dispute"}
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         ) : null}
         {report.status === "DISPUTED" ? (
@@ -407,6 +508,60 @@ const styles = StyleSheet.create({
   disputeText: {
     color: "#D64545",
     fontWeight: "700",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  disputeEvidence: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#B9D9BC",
+    paddingTop: 14,
+    gap: 10,
+  },
+  disputeEvidenceTitle: {
+    color: "#23302A",
+    fontWeight: "800",
+    fontFamily: "Sora",
+    fontSize: 14,
+  },
+  disputeInput: {
+    minHeight: 76,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#B9D9BC",
+    padding: 12,
+    textAlignVertical: "top",
+    color: "#23302A",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  disputePhotoRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  photoPicker: {
+    borderWidth: 1,
+    borderColor: "#2E7D4F",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  photoPickerText: {
+    color: "#2E7D4F",
+    fontWeight: "700",
+    fontFamily: "Plus Jakarta Sans",
+    fontSize: 12,
+  },
+  photoAttached: {
+    color: "#3A5A44",
+    fontFamily: "Plus Jakarta Sans",
+    fontSize: 12,
+  },
+  submitDisputeButton: {
+    backgroundColor: "#D64545",
+    borderRadius: 999,
+    alignItems: "center",
+    paddingVertical: 11,
+  },
+  submitDisputeText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
     fontFamily: "Plus Jakarta Sans",
   },
   verifyButton: {

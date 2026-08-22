@@ -8,6 +8,8 @@ import s3Client from "../services/s3.service";
 import { profileImageUrl } from "../services/profile-images.service";
 import { createNotification } from "../services/notification.service";
 import { recordWrongReport } from "../services/notification.service";
+import { checkImageAuthenticity } from "../services/ai.service";
+import { loadReportImagesForAI } from "../services/report-images.service";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -43,12 +45,10 @@ export const updateWorkerLocation = async (
     longitude < -180 ||
     longitude > 180
   ) {
-    return res
-      .status(400)
-      .json({
-        success: false,
-        error: "Valid latitude and longitude are required",
-      });
+    return res.status(400).json({
+      success: false,
+      error: "Valid latitude and longitude are required",
+    });
   }
   try {
     await prisma.user.update({
@@ -255,7 +255,8 @@ export const getWorkerStats = async (
     ).length;
     const disputeRatePercent =
       recentTotal > 0 ? Math.round((recentDisputed / recentTotal) * 100) : 0;
-    const disputeWarning = recentTotal >= 3 && (recentDisputed >= 2 || disputeRatePercent >= 25);
+    const disputeWarning =
+      recentTotal >= 3 && (recentDisputed >= 2 || disputeRatePercent >= 25);
 
     return res.json({
       success: true,
@@ -503,7 +504,7 @@ export const rejectWorkerCleanup = async (
     const id = req.params.id as string;
     const workerId = req.user!.id;
     const body = req.body ?? {};
-    
+
     // Support structured reason codes or legacy string
     let formattedReason = "";
     if (typeof body.reasonCode === "string" && body.reasonCode.trim()) {
@@ -933,6 +934,49 @@ export const completeWorkerCleanup = async (
         return [before, after, updated];
       },
     );
+
+    const authenticity = await loadReportImagesForAI([
+      beforeImageKey,
+      afterImageKey,
+    ])
+      .then((images) => Promise.all(images.map(checkImageAuthenticity)))
+      .catch(() => []);
+    const flagged = authenticity.some(
+      (item) => item.aiGeneratedConfidence >= 0.7,
+    );
+    await prisma.$transaction(async (tx) => {
+      await Promise.all(
+        [beforeImage, afterImage].map((image, index) =>
+          tx.reportImage.update({
+            where: { id: image.id },
+            data: {
+              isSuspectedAIGenerated:
+                authenticity[index]?.isLikelyAIGenerated ?? false,
+              aiGeneratedConfidence:
+                authenticity[index]?.aiGeneratedConfidence ?? 0,
+              authenticityCheckedAt: new Date(),
+            },
+          }),
+        ),
+      );
+      if (flagged) {
+        await tx.report.update({
+          where: { id: cleanup.reportId },
+          data: {
+            flaggedForManualReview: true,
+            flagReason: "Cleanup evidence may be AI-generated",
+          },
+        });
+        await tx.notification.create({
+          data: {
+            audience: "AUTHORITY",
+            type: "IMAGE_FLAGGED_FOR_REVIEW",
+            title: "Cleanup evidence flagged",
+            message: `Cleanup ${id} requires manual image review.`,
+          },
+        });
+      }
+    });
 
     await createNotification({
       userId: updatedCleanup.report.userId,

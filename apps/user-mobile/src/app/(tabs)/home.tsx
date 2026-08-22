@@ -24,6 +24,16 @@ import { getCdnUrl } from '@/lib/cdn';
 
 export default function HomeDashboard() {
   const router = useRouter();
+  useEffect(() => {
+    fetch("http://192.168.1.4:7000/api/health")
+      .then(async (res) => {
+        console.log("[TEST] status:", res.status);
+        console.log("[TEST] body:", await res.text());
+      })
+      .catch((err) => {
+        console.log("[TEST] FAILED:", err);
+      });
+  }, []);
   // Only use store for profile (name/avatar set by _layout.tsx from session)
   const { profile } = useCitizenStore();
   const firstName = profile.name ? profile.name.split(' ')[0] : 'there';
@@ -416,7 +426,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(252,254,250,0.2)',
   },
-  bannerBadgeText:{
+  bannerBadgeText: {
     fontSize: 9,
     fontWeight: '800',
     color: 'rgba(252,254,250,0.8)',

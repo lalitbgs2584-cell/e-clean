@@ -1,10 +1,19 @@
 import type { Response } from "express";
 import type { AuthenticatedRequest } from "../middlewares/auth.middleware";
 import { prisma } from "db/client";
+import { config } from "../config/env";
+import { createNotification } from "../services/notification.service";
+import { checkImageAuthenticity } from "../services/ai.service";
 import {
-  createNotification,
-  recordWrongReport,
-} from "../services/notification.service";
+  isDisputeEvidenceImageKey,
+  loadReportImagesForAI,
+} from "../services/report-images.service";
+import {
+  findNearbyEligibleCitizens,
+  notifyForCommunityReview,
+  resolveCommunityReview,
+  resolveExpiredCommunityReviews,
+} from "../services/community-review.service";
 
 export const listReports = async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -145,12 +154,10 @@ export const updateCitizenReport = async (
     littererClothingDescription !== null &&
     typeof littererClothingDescription !== "string"
   ) {
-    return res
-      .status(400)
-      .json({
-        success: false,
-        error: "littererClothingDescription must be text",
-      });
+    return res.status(400).json({
+      success: false,
+      error: "littererClothingDescription must be text",
+    });
   }
 
   try {
@@ -208,9 +215,10 @@ export const verifyResolvedReport = async (
   }
 
   const { id } = req.params;
-  const { result, comment } = req.body as {
+  const { result, comment, evidenceImageKeys } = req.body as {
     result?: "VERIFIED" | "DISPUTED";
     comment?: string;
+    evidenceImageKeys?: string[];
   };
   if (result !== "VERIFIED" && result !== "DISPUTED") {
     return res
@@ -221,6 +229,32 @@ export const verifyResolvedReport = async (
     return res
       .status(400)
       .json({ success: false, error: "comment must be text" });
+  }
+  if (
+    evidenceImageKeys !== undefined &&
+    (!Array.isArray(evidenceImageKeys) ||
+      evidenceImageKeys.some((key) => typeof key !== "string" || !key.trim()))
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: "evidenceImageKeys must be an array of image keys",
+    });
+  }
+  if (result === "DISPUTED" && !comment?.trim() && !evidenceImageKeys?.length) {
+    return res.status(400).json({
+      success: false,
+      error: "A comment or photo evidence is required to dispute cleanup",
+    });
+  }
+  if (
+    evidenceImageKeys?.some(
+      (key) => !isDisputeEvidenceImageKey(id as string, key.trim()),
+    )
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: "One or more dispute evidence image keys are invalid",
+    });
   }
 
   try {
@@ -233,56 +267,83 @@ export const verifyResolvedReport = async (
         .json({ success: false, error: "Report not found" });
     }
     if (report.status !== "RESOLVED") {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          error: "Only authority-resolved reports can be verified",
-        });
+      return res.status(409).json({
+        success: false,
+        error: "Only authority-resolved reports can be verified",
+      });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
-      await tx.reportVerification.upsert({
-        where: { reportId: report.id },
-        create: {
-          reportId: report.id,
-          userId,
-          result,
-          comment: comment?.trim() || null,
-        },
-        update: { result, comment: comment?.trim() || null },
-      });
-
-      if (result === "VERIFIED") {
-        const verifiedPoints = report.isLittererReport ? 50 : 10;
-        // Write a ledger row first — the balance increment is inside the
-        // same transaction so they always stay in sync.
-        await tx.pointTransaction.create({
-          data: {
-            userId: report.userId,
+    const { updated, evidenceImages } = await prisma.$transaction(
+      async (tx) => {
+        await tx.reportVerification.upsert({
+          where: { reportId: report.id },
+          create: {
             reportId: report.id,
-            points: verifiedPoints,
-            reason: report.isLittererReport
-              ? "LITTERER_REPORT_VERIFIED"
-              : "REPORT_VERIFIED",
+            userId,
+            result,
+            comment: comment?.trim() || null,
+          },
+          update: { result, comment: comment?.trim() || null },
+        });
+
+        if (result === "VERIFIED") {
+          const verifiedPoints = report.isLittererReport ? 50 : 10;
+          // Write a ledger row first — the balance increment is inside the
+          // same transaction so they always stay in sync.
+          await tx.pointTransaction.create({
+            data: {
+              userId: report.userId,
+              reportId: report.id,
+              points: verifiedPoints,
+              reason: report.isLittererReport
+                ? "LITTERER_REPORT_VERIFIED"
+                : "REPORT_VERIFIED",
+            },
+          });
+          await tx.user.update({
+            where: { id: report.userId },
+            data: { points: { increment: verifiedPoints } },
+          });
+        }
+
+        const reviewClosesAt = new Date(
+          Date.now() + config.communityReviewWindowHours * 3_600_000,
+        );
+        const createdEvidence =
+          result === "DISPUTED" && evidenceImageKeys?.length
+            ? await Promise.all(
+                evidenceImageKeys.map((storagePath) =>
+                  tx.reportImage.create({
+                    data: {
+                      reportId: report.id,
+                      uploadedBy: userId,
+                      storagePath: storagePath.trim(),
+                      type: "DISPUTE_EVIDENCE",
+                    },
+                  }),
+                ),
+              )
+            : [];
+        const nextReport = await tx.report.update({
+          where: { id: report.id },
+          data:
+            result === "VERIFIED"
+              ? { status: "VERIFIED" }
+              : {
+                  status: "DISPUTED",
+                  communityReviewStatus: "PENDING",
+                  communityReviewOpensAt: new Date(),
+                  communityReviewClosesAt: reviewClosesAt,
+                },
+          include: {
+            images: true,
+            cleanup: { include: { beforeImage: true, afterImage: true } },
+            verification: true,
           },
         });
-        await tx.user.update({
-          where: { id: report.userId },
-          data: { points: { increment: verifiedPoints } },
-        });
-      }
-
-      return tx.report.update({
-        where: { id: report.id },
-        data: { status: result === "VERIFIED" ? "VERIFIED" : "DISPUTED" },
-        include: {
-          images: true,
-          cleanup: { include: { beforeImage: true, afterImage: true } },
-          verification: true,
-        },
-      });
-    });
+        return { updated: nextReport, evidenceImages: createdEvidence };
+      },
+    );
 
     if (result === "VERIFIED") {
       await createNotification({
@@ -293,10 +354,14 @@ export const verifyResolvedReport = async (
         message: "Thank you for confirming that the area is clean.",
       });
     } else {
-      await recordWrongReport(
-        report.userId,
-        "Citizen disputed an authority-approved cleanup",
-      );
+      await prisma.notification.create({
+        data: {
+          audience: "AUTHORITY",
+          type: "DISPUTE_OPENED",
+          title: "Cleanup dispute opened",
+          message: `Report ${report.id} has entered community review.`,
+        },
+      });
       await createNotification({
         userId: report.userId,
         reportId: report.id,
@@ -304,6 +369,50 @@ export const verifyResolvedReport = async (
         title: "Dispute submitted",
         message: "Your dispute has been sent to the authority for review.",
       });
+      await notifyForCommunityReview(report.id);
+      if (evidenceImages.length) {
+        const authenticity = await loadReportImagesForAI(
+          evidenceImages.map((image) => image.storagePath),
+        )
+          .then((images) => Promise.all(images.map(checkImageAuthenticity)))
+          .catch(() => []);
+        const flagged = authenticity.some(
+          (assessment) => assessment.aiGeneratedConfidence >= 0.7,
+        );
+        await prisma.$transaction(async (tx) => {
+          await Promise.all(
+            evidenceImages.map((image, index) =>
+              tx.reportImage.update({
+                where: { id: image.id },
+                data: {
+                  isSuspectedAIGenerated:
+                    authenticity[index]?.isLikelyAIGenerated ?? false,
+                  aiGeneratedConfidence:
+                    authenticity[index]?.aiGeneratedConfidence ?? 0,
+                  authenticityCheckedAt: new Date(),
+                },
+              }),
+            ),
+          );
+          if (flagged) {
+            await tx.report.update({
+              where: { id: report.id },
+              data: {
+                flaggedForManualReview: true,
+                flagReason: "Dispute evidence may be AI-generated",
+              },
+            });
+            await tx.notification.create({
+              data: {
+                audience: "AUTHORITY",
+                type: "IMAGE_FLAGGED_FOR_REVIEW",
+                title: "Dispute evidence flagged",
+                message: `Report ${report.id} requires manual image review.`,
+              },
+            });
+          }
+        });
+      }
     }
 
     return res.json({ success: true, data: updated });
@@ -312,6 +421,170 @@ export const verifyResolvedReport = async (
     return res
       .status(500)
       .json({ success: false, error: "Failed to save verification" });
+  }
+};
+
+export const submitCommunityVote = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  const voterId = req.user?.id;
+  const { id } = req.params;
+  const { vote } = req.body as { vote?: "CLEAN" | "NOT_CLEAN" };
+  if (!voterId) {
+    return res.status(401).json({ success: false, error: "Unauthorized" });
+  }
+  if (vote !== "CLEAN" && vote !== "NOT_CLEAN") {
+    return res.status(400).json({
+      success: false,
+      error: "vote must be CLEAN or NOT_CLEAN",
+    });
+  }
+
+  try {
+    const report = await prisma.report.findUnique({
+      where: { id: id as string },
+      include: { cleanup: { select: { workerId: true } } },
+    });
+    if (
+      !report ||
+      report.communityReviewStatus !== "PENDING" ||
+      !report.communityReviewClosesAt ||
+      report.communityReviewClosesAt <= new Date()
+    ) {
+      return res.status(409).json({
+        success: false,
+        error: "This community review is not open",
+      });
+    }
+
+    const eligible = await findNearbyEligibleCitizens(
+      report.latitude,
+      report.longitude,
+      [report.userId, report.cleanup?.workerId].filter(
+        (value): value is string => Boolean(value),
+      ),
+    );
+    if (!eligible.some((citizen) => citizen.id === voterId)) {
+      return res.status(403).json({
+        success: false,
+        error: "You are not eligible to review this cleanup",
+      });
+    }
+
+    await prisma.communityVote.create({
+      data: {
+        reportId: report.id,
+        voterId,
+        vote,
+        distanceMeters:
+          eligible.find((citizen) => citizen.id === voterId)?.distanceMeters ??
+          0,
+      },
+    });
+    const resolution = await resolveCommunityReview(report.id);
+    return res.status(201).json({
+      success: true,
+      data: { vote, resolution },
+    });
+  } catch (error: unknown) {
+    if ((error as { code?: string }).code === "P2002") {
+      return res.status(409).json({
+        success: false,
+        error: "You have already voted on this cleanup",
+      });
+    }
+    console.error("submitCommunityVote error:", error);
+    return res
+      .status(500)
+      .json({ success: false, error: "Could not save vote" });
+  }
+};
+
+export const getCommunityReviewReport = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  const voterId = req.user?.id;
+  const { id } = req.params;
+  if (!voterId) {
+    return res.status(401).json({ success: false, error: "Unauthorized" });
+  }
+
+  try {
+    const report = await prisma.report.findUnique({
+      where: { id: id as string },
+      include: {
+        images: true,
+        cleanup: {
+          include: { beforeImage: true, afterImage: true, noWasteImage: true },
+        },
+        communityVotes: { select: { vote: true } },
+      },
+    });
+    if (
+      !report ||
+      report.communityReviewStatus !== "PENDING" ||
+      !report.communityReviewClosesAt ||
+      report.communityReviewClosesAt <= new Date()
+    ) {
+      return res.status(404).json({
+        success: false,
+        error: "Community review not found or no longer open",
+      });
+    }
+    const excludedUserIds = [report.userId, report.cleanup?.workerId].filter(
+      (value): value is string => Boolean(value),
+    );
+    const eligible = await findNearbyEligibleCitizens(
+      report.latitude,
+      report.longitude,
+      excludedUserIds,
+    );
+    if (!eligible.some((citizen) => citizen.id === voterId)) {
+      return res.status(403).json({
+        success: false,
+        error: "You are not eligible to review this cleanup",
+      });
+    }
+    return res.json({
+      success: true,
+      data: {
+        ...report,
+        communityVotes: undefined,
+        voteCount: report.communityVotes.length,
+        hasVoted: await prisma.communityVote
+          .findUnique({
+            where: { reportId_voterId: { reportId: report.id, voterId } },
+            select: { id: true },
+          })
+          .then(Boolean),
+      },
+    });
+  } catch (error) {
+    console.error("getCommunityReviewReport error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Could not load community review",
+    });
+  }
+};
+
+export const resolveExpiredCommunityReviewsEndpoint = async (
+  _req: AuthenticatedRequest,
+  res: Response,
+) => {
+  try {
+    return res.json({
+      success: true,
+      data: await resolveExpiredCommunityReviews(),
+    });
+  } catch (error) {
+    console.error("resolveExpiredCommunityReviews error:", error);
+    return res.status(500).json({
+      success: false,
+      error: "Could not resolve expired community reviews",
+    });
   }
 };
 
@@ -536,7 +809,9 @@ export const upvoteReport = async (
       select: { id: true },
     });
     if (!report) {
-      return res.status(404).json({ success: false, error: "Report not found" });
+      return res
+        .status(404)
+        .json({ success: false, error: "Report not found" });
     }
 
     const existing = await prisma.reportUpvote.findUnique({
@@ -576,6 +851,8 @@ export const upvoteReport = async (
     });
   } catch (error) {
     console.error("upvoteReport error:", error);
-    return res.status(500).json({ success: false, error: "Failed to update upvote" });
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to update upvote" });
   }
 };

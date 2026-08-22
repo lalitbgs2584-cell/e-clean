@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const limit = Math.min(
     100,
-    Math.max(1, Number(searchParams.get("limit")) || 25),
+    Math.max(1, Number(searchParams.get("limit")) || 100),
   );
   const search = searchParams.get("search")?.trim();
   const where = {

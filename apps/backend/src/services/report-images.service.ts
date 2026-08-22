@@ -10,6 +10,7 @@ import { config } from "../config/env";
 import client from "./s3.service";
 
 export type ReportImageSlot = "original" | "support";
+export type UploadImageSlot = ReportImageSlot | "dispute";
 
 const STAGING_PREFIX = "reports/staging/";
 const LIFECYCLE_RULE_ID = "expire-report-staging-after-one-day";
@@ -19,6 +20,16 @@ export const stagingImageKey = (reportId: string, slot: ReportImageSlot) =>
 
 export const finalImageKey = (reportId: string, slot: ReportImageSlot) =>
   `reports/${reportId}/${slot}.jpg`;
+
+/** An immutable citizen-owned evidence key used only for cleanup disputes. */
+export const disputeEvidenceImageKey = (reportId: string) =>
+  `reports/${reportId}/disputes/${crypto.randomUUID()}.jpg`;
+
+export const isDisputeEvidenceImageKey = (reportId: string, key: string) =>
+  new RegExp(
+    `^reports/${reportId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/disputes/[0-9a-f-]{36}\\.jpg$`,
+    "i",
+  ).test(key);
 
 export const isExpectedStagingImageKey = (
   reportId: string,

@@ -59,8 +59,13 @@ export default function AlertsScreen() {
       );
       markNotificationRead(item.id).catch(load);
     }
-    if (item.report?.id)
-      router.push(`/report-tracking/${item.report.id}` as any);
+    if (item.report?.id) {
+      router.push(
+        (item.type === "COMMUNITY_VERIFICATION_REQUEST"
+          ? `/community-vote/${item.report.id}`
+          : `/report-tracking/${item.report.id}`) as any,
+      );
+    }
   };
   const markAll = async () => {
     await markAllNotificationsRead();
