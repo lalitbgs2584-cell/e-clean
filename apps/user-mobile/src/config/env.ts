@@ -1,4 +1,4 @@
-const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://192.168.1.4:7000";
+const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? "http://10.191.92.130:7000";
 
 /**
  * Values exposed to the Expo app must use the EXPO_PUBLIC_ prefix.

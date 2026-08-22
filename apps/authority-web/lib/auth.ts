@@ -62,7 +62,7 @@ export const auth = betterAuth({
     authorityUrl,
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "http://192.168.1.4:3000",
+    "http://10.191.92.130:3000",
     "http://192.168.1.2:3000",
   ],
   plugins: [bearer(), nextCookies()],

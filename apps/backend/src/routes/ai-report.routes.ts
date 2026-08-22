@@ -12,6 +12,6 @@ const reportRateLimiter = createRateLimiter({
   message: "Too many report assessments submitted. Please wait a minute before submitting again.",
 });
 
-aiReportRouter.post("/", requireAuth, generateAIBasedReport);
+aiReportRouter.post("/", requireAuth, reportRateLimiter, generateAIBasedReport);
 
 export { aiReportRouter };

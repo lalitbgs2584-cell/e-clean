@@ -25,7 +25,7 @@ import { getCdnUrl } from '@/lib/cdn';
 export default function HomeDashboard() {
   const router = useRouter();
   useEffect(() => {
-    fetch("http://192.168.1.4:7000/api/health")
+    fetch("http://10.191.92.130:7000/api/health")
       .then(async (res) => {
         console.log("[TEST] status:", res.status);
         console.log("[TEST] body:", await res.text());

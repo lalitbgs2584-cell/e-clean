@@ -20,7 +20,7 @@ app.listen(config.port, config.host, async () => {
   console.log(`🚀 e-clean Backend Server is running!`);
   console.log(`📡 Local URL:   http://localhost:${config.port}`);
   console.log(
-    `🌐 Network IP:  http://192.168.1.4:${config.port} (or your machine's LAN IP)`,
+    `🌐 Network IP:  http://10.191.92.130:${config.port} (or your machine's LAN IP)`,
   );
   console.log(`🔐 Auth Path:   /api/auth`);
   console.log(`❤️  Health Path: /api/health`);
