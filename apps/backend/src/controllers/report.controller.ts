@@ -519,3 +519,63 @@ export const checkNearbyReport = async (
     });
   }
 };
+
+export const upvoteReport = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ success: false, error: "Unauthorized" });
+  }
+
+  const { id } = req.params;
+  try {
+    const report = await prisma.report.findUnique({
+      where: { id: id as string },
+      select: { id: true },
+    });
+    if (!report) {
+      return res.status(404).json({ success: false, error: "Report not found" });
+    }
+
+    const existing = await prisma.reportUpvote.findUnique({
+      where: {
+        reportId_userId: { reportId: id as string, userId },
+      },
+    });
+
+    let upvoted = false;
+    const result = await prisma.$transaction(async (tx) => {
+      if (existing) {
+        await tx.reportUpvote.delete({
+          where: { id: existing.id },
+        });
+        return tx.report.update({
+          where: { id: id as string },
+          data: { upvoteCount: { decrement: 1 } },
+          select: { id: true, upvoteCount: true },
+        });
+      } else {
+        await tx.reportUpvote.create({
+          data: { reportId: id as string, userId },
+        });
+        upvoted = true;
+        return tx.report.update({
+          where: { id: id as string },
+          data: { upvoteCount: { increment: 1 } },
+          select: { id: true, upvoteCount: true },
+        });
+      }
+    });
+
+    return res.json({
+      success: true,
+      upvoted,
+      upvoteCount: Math.max(0, result.upvoteCount),
+    });
+  } catch (error) {
+    console.error("upvoteReport error:", error);
+    return res.status(500).json({ success: false, error: "Failed to update upvote" });
+  }
+};

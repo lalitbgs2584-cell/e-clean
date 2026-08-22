@@ -217,6 +217,8 @@ export function serializeReport(report: any): AuthorityReport {
     attention: report.attention,
     nearSensitiveLocation: report.nearSensitiveLocation,
     severityScore: report.severityScore ?? null,
+    aiConfidence: report.aiConfidence ?? null,
+    aiProcessedAt: toIso(report.aiProcessedAt),
     duplicateOfId: report.duplicateOfId ?? null,
     upvoteCount: report.upvoteCount ?? 0,
     recyclingPartnerId: report.recyclingPartnerId ?? null,

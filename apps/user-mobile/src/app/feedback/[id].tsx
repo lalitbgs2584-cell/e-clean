@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,27 +9,88 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCitizenStore } from '@/store/citizen-store';
+import {
+  getMyReports,
+  verifyMyReport,
+  type CitizenReport,
+} from '@/services/reportService';
+import { useAppModal } from '@/hooks/useAppModal';
 
 export default function FeedbackScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const { submitFeedback } = useCitizenStore();
+  const { showModal } = useAppModal();
 
-  const reportId = id ? decodeURIComponent(id) : '#1034';
+  const [reports, setReports] = useState<CitizenReport[]>([]);
+  const [selectedReportId, setSelectedReportId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [rating, setRating] = useState(5);
   const [text, setText] = useState('Great work! Area is now clean.');
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = () => {
-    submitFeedback(reportId, rating, text);
-    setSubmitted(true);
-    setTimeout(() => {
-      router.replace('/(tabs)/my-reports');
-    }, 1200);
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await getMyReports();
+        setReports(list);
+        const paramId = id ? decodeURIComponent(id) : '';
+        const match = list.find((r) => r.id === paramId || r.id.startsWith(paramId.replace('#', '')));
+        if (match) {
+          setSelectedReportId(match.id);
+        } else if (list.length > 0) {
+          // Prefer a resolved or completed report, else the newest
+          const resolved = list.find((r) => ['RESOLVED', 'CLEANUP_COMPLETED', 'VERIFIED'].includes(r.status));
+          setSelectedReportId(resolved ? resolved.id : list[0].id);
+        }
+      } catch (err) {
+        console.warn('[feedback] load error', err);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  const handleSubmit = async () => {
+    if (!selectedReportId && reports.length === 0) {
+      showModal({
+        variant: 'info',
+        title: 'No reports to rate',
+        message: 'Submit a waste report first to provide resolution feedback.',
+      });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (selectedReportId) {
+        // Submit rating result to backend
+        await verifyMyReport(
+          selectedReportId,
+          rating >= 3 ? 'VERIFIED' : 'DISPUTED',
+          `Rating: ${rating}/5 ★ — ${text.trim()}`,
+        ).catch(() => {});
+      }
+      submitFeedback(selectedReportId || '#1034', rating, text);
+      setSubmitted(true);
+      setTimeout(() => {
+        router.replace('/(tabs)/my-reports');
+      }, 1200);
+    } catch (e: any) {
+      showModal({
+        variant: 'error',
+        title: 'Submission failed',
+        message: e.message ?? 'Could not save your rating. Please try again.',
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -50,11 +111,19 @@ export default function FeedbackScreen() {
 
         {/* Green Smiling Face Badge */}
         <View style={styles.faceCircle}>
-          <Text style={styles.faceIcon}>😃</Text>
+          <Text style={styles.faceIcon}>
+            {rating >= 4 ? '😃' : rating === 3 ? '😐' : '😞'}
+          </Text>
         </View>
 
         <Text style={styles.title}>How was the resolution?</Text>
-        <Text style={styles.subtitle}>Please rate your experience for report {reportId}</Text>
+        <Text style={styles.subtitle}>
+          {loading
+            ? 'Loading report details...'
+            : selectedReportId
+              ? `Please rate your experience for report #${selectedReportId.slice(0, 8).toUpperCase()}`
+              : 'Please rate your recent cleanup experience'}
+        </Text>
 
         {/* 5 Star Rating Bar */}
         <View style={styles.starsRow}>
@@ -82,10 +151,18 @@ export default function FeedbackScreen() {
         <Text style={styles.charCount}>{text.length}/150</Text>
 
         {/* Submit Button */}
-        <Pressable style={styles.submitBtn} onPress={handleSubmit} disabled={submitted}>
-          <Text style={styles.submitBtnText}>
-            {submitted ? 'Thank You for Rating! ✓' : 'Submit Feedback'}
-          </Text>
+        <Pressable
+          style={[styles.submitBtn, (submitting || loading) && { opacity: 0.7 }]}
+          onPress={handleSubmit}
+          disabled={submitted || submitting || loading}
+        >
+          {submitting ? (
+            <ActivityIndicator color="#FCFEFA" />
+          ) : (
+            <Text style={styles.submitBtnText}>
+              {submitted ? 'Thank You for Rating! ✓' : 'Submit Feedback'}
+            </Text>
+          )}
         </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -6,6 +6,7 @@ const userRouter = Router();
 
 userRouter.get("/leaderboard", requireAuth, UserController.getLeaderboard);
 userRouter.get("/me/rank", requireAuth, UserController.getMyRank);
+userRouter.get("/me/points", requireAuth, UserController.getMyPoints);
 userRouter.get("/me", requireAuth, UserController.getProfile);
 
 // Self-managed profile image (CITIZEN and AUTHORITY only; WORKER is rejected

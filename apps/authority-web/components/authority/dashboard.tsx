@@ -609,6 +609,10 @@ function ActionModal({
       "Link duplicate reports",
       "Connect this report to the strongest existing duplicate match.",
     ],
+    route_recycling: [
+      "Route to Recycling Partner",
+      "Assign this report to an authorized recycling partner for material recovery.",
+    ],
   };
 
   return (
@@ -1562,6 +1566,27 @@ export default function AuthorityDashboard() {
 
   const title = page === "Overview" ? "Authority Dashboard" : page;
 
+  const handleExportCsv = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("/api/authority/reports/export", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `eclean-reports-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export error", err);
+    }
+  };
+
   const openReport = (report: AuthorityReport) => {
     setSelectedReportId(report.id);
     setDrawerOpen(true);
@@ -1692,7 +1717,7 @@ export default function AuthorityDashboard() {
               </p>
             </div>
             <div className="heading-actions">
-              <button className="button ghost">
+              <button className="button ghost" onClick={handleExportCsv}>
                 <Download size={16} /> Export
               </button>
               <button

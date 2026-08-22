@@ -179,12 +179,30 @@ let state: CitizenState = {
   ],
 };
 
+import * as SecureStore from 'expo-secure-store';
+
+const DRAFT_STORAGE_KEY = 'eclean_citizen_draft_report';
+
 const listeners = new Set<() => void>();
 
 function setState(updater: (prev: CitizenState) => CitizenState) {
   state = updater(state);
   listeners.forEach((l) => l());
 }
+
+// Auto-restore draft from SecureStore on startup
+(async () => {
+  try {
+    const saved = await SecureStore.getItemAsync(DRAFT_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      setState((prev) => ({
+        ...prev,
+        draftReport: { ...prev.draftReport, ...parsed },
+      }));
+    }
+  } catch {}
+})();
 
 function subscribe(listener: () => void) {
   listeners.add(listener);
@@ -207,9 +225,20 @@ export function useCitizenStore() {
       }));
     },
     updateDraftReport: (draft: Partial<DraftReport>) => {
+      setState((prev) => {
+        const nextDraft = { ...prev.draftReport, ...draft };
+        SecureStore.setItemAsync(DRAFT_STORAGE_KEY, JSON.stringify(nextDraft)).catch(() => {});
+        return {
+          ...prev,
+          draftReport: nextDraft,
+        };
+      });
+    },
+    clearDraftReport: () => {
+      SecureStore.deleteItemAsync(DRAFT_STORAGE_KEY).catch(() => {});
       setState((prev) => ({
         ...prev,
-        draftReport: { ...prev.draftReport, ...draft },
+        draftReport: {},
       }));
     },
     createNewReport: (data: {
@@ -218,6 +247,7 @@ export function useCitizenStore() {
       photos: string[];
       location: string;
     }): Report => {
+      SecureStore.deleteItemAsync(DRAFT_STORAGE_KEY).catch(() => {});
       const newId = `#${Math.floor(1036 + Math.random() * 1000)}`;
       const newReport: Report = {
         id: newId,

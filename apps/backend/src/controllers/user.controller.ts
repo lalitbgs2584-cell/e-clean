@@ -25,13 +25,33 @@ export class UserController {
   }
 
   private static async leaderboardRows(scope: "all" | "month") {
-    const reportsWhere =
-      scope === "month"
-        ? {
-            status: "VERIFIED" as const,
-            updatedAt: { gte: UserController.monthStart() },
-          }
-        : { status: "VERIFIED" as const };
+    if (scope === "month") {
+      const monthStart = UserController.monthStart();
+      const users = await prisma.user.findMany({
+        where: { role: "CITIZEN" },
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          pointTransactions: {
+            where: { createdAt: { gte: monthStart } },
+            select: { points: true },
+          },
+        },
+      });
+      return users
+        .map((user) => ({
+          id: user.id,
+          name: user.name,
+          image: user.image,
+          points: user.pointTransactions.reduce((sum, tx) => sum + tx.points, 0),
+        }))
+        .sort(
+          (left, right) =>
+            right.points - left.points || left.name.localeCompare(right.name),
+        );
+    }
+
     const users = await prisma.user.findMany({
       where: { role: "CITIZEN" },
       select: {
@@ -39,7 +59,6 @@ export class UserController {
         name: true,
         image: true,
         points: true,
-        reports: { where: reportsWhere, select: { isLittererReport: true } },
       },
     });
     return users
@@ -47,13 +66,7 @@ export class UserController {
         id: user.id,
         name: user.name,
         image: user.image,
-        points:
-          scope === "all"
-            ? user.points
-            : user.reports.reduce(
-                (sum, report) => sum + (report.isLittererReport ? 50 : 10),
-                0,
-              ),
+        points: user.points,
       }))
       .sort(
         (left, right) =>
@@ -312,6 +325,59 @@ export class UserController {
       return res
         .status(500)
         .json({ success: false, error: "Failed to update profile image" });
+    }
+  }
+
+  public static async getMyPoints(req: AuthenticatedRequest, res: Response) {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "Unauthorized" });
+    }
+
+    try {
+      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+      const transactions = await prisma.pointTransaction.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: limit,
+        include: {
+          report: {
+            select: {
+              id: true,
+              location: true,
+              wasteCategory: true,
+              isLittererReport: true,
+            },
+          },
+        },
+      });
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { points: true },
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          totalPoints: user?.points ?? 0,
+          transactions: transactions.map((tx) => ({
+            id: tx.id,
+            points: tx.points,
+            reason: tx.reason,
+            reportId: tx.reportId,
+            reportLocation: tx.report?.location ?? null,
+            wasteCategory: tx.report?.wasteCategory ?? null,
+            isLittererReport: tx.report?.isLittererReport ?? false,
+            createdAt: tx.createdAt,
+          })),
+        },
+      });
+    } catch (error) {
+      console.error("getMyPoints error:", error);
+      return res
+        .status(500)
+        .json({ success: false, error: "Failed to load points ledger" });
     }
   }
 }

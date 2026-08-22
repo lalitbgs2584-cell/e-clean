@@ -16,6 +16,7 @@ import { getCdnUrl } from "@/lib/cdn";
 import {
   getMyReport,
   verifyMyReport,
+  upvoteReport,
   type CitizenReport,
 } from "@/services/reportService";
 import { useAppModal } from "@/hooks/useAppModal";
@@ -37,11 +38,16 @@ export default function ReportTrackingScreen() {
   const [report, setReport] = useState<CitizenReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [actioning, setActioning] = useState(false);
+  const [upvoting, setUpvoting] = useState(false);
+  const [upvoted, setUpvoted] = useState(false);
+  const [upvoteCount, setUpvoteCount] = useState(0);
 
   const load = useCallback(async () => {
     if (!id) return;
     try {
-      setReport(await getMyReport(id));
+      const data = await getMyReport(id);
+      setReport(data);
+      setUpvoteCount(data.upvoteCount ?? 0);
     } catch (error) {
       showModal({
         variant: "error",
@@ -55,6 +61,24 @@ export default function ReportTrackingScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleUpvote = async () => {
+    if (!report || upvoting) return;
+    setUpvoting(true);
+    try {
+      const res = await upvoteReport(report.id);
+      setUpvoted(res.upvoted);
+      setUpvoteCount(res.upvoteCount);
+    } catch (error) {
+      showModal({
+        variant: "error",
+        title: "Could not upvote",
+        message: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setUpvoting(false);
+    }
+  };
 
   const verify = async (result: "VERIFIED" | "DISPUTED") => {
     if (!report || actioning) return;
@@ -120,15 +144,29 @@ export default function ReportTrackingScreen() {
             {report.location ??
               `${report.latitude.toFixed(5)}, ${report.longitude.toFixed(5)}`}
           </Text>
-          <Pressable
-            onPress={() =>
-              Linking.openURL(
-                `https://www.google.com/maps/search/?api=1&query=${report.latitude},${report.longitude}`,
-              )
-            }
-          >
-            <Text style={styles.mapLink}>Open location in maps ↗</Text>
-          </Pressable>
+          <View style={styles.cardActionsRow}>
+            <Pressable
+              onPress={() =>
+                Linking.openURL(
+                  `https://www.google.com/maps/search/?api=1&query=${report.latitude},${report.longitude}`,
+                )
+              }
+            >
+              <Text style={styles.mapLink}>Open location in maps ↗</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.upvoteBtn, upvoted && styles.upvoteBtnActive]}
+              onPress={handleUpvote}
+              disabled={upvoting}
+            >
+              <Text style={[styles.upvoteIcon, upvoted && styles.upvoteIconActive]}>
+                👍
+              </Text>
+              <Text style={[styles.upvoteText, upvoted && styles.upvoteTextActive]}>
+                {upvoteCount} {upvoteCount === 1 ? "Upvote" : "Upvotes"}
+              </Text>
+            </Pressable>
+          </View>
         </View>
         <Text style={styles.section}>Progress</Text>
         <View style={styles.timeline}>
@@ -250,11 +288,47 @@ const styles = StyleSheet.create({
     fontFamily: "Sora",
   },
   location: { color: "#23302A", fontFamily: "Plus Jakarta Sans" },
+  cardActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#F0F4EF",
+  },
   mapLink: {
     color: "#2E7D4F",
     fontWeight: "700",
     fontFamily: "Plus Jakarta Sans",
-    marginTop: 4,
+  },
+  upvoteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "#F5F8F3",
+    borderWidth: 1,
+    borderColor: "#DCE3D8",
+  },
+  upvoteBtnActive: {
+    backgroundColor: "#E8F5E9",
+    borderColor: "#2E7D4F",
+  },
+  upvoteIcon: {
+    fontSize: 13,
+  },
+  upvoteIconActive: {},
+  upvoteText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#4A6B53",
+    fontFamily: "Plus Jakarta Sans",
+  },
+  upvoteTextActive: {
+    color: "#2E7D4F",
   },
   section: {
     marginTop: 24,

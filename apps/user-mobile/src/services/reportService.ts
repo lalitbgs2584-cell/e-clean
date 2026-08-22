@@ -20,6 +20,8 @@ export interface CitizenReport {
   wasteCategory: string | null;
   severityScore: number | null;
   attention: string;
+  upvoteCount?: number;
+  isLittererReport?: boolean;
   createdAt: string;
   images: Array<{
     id: string;
@@ -55,6 +57,27 @@ export interface LeaderboardEntry {
   profileImageUrl: string | null;
   points: number;
   rank: number;
+}
+
+export interface PointTransactionItem {
+  id: string;
+  points: number;
+  reason: string;
+  reportId: string | null;
+  reportLocation: string | null;
+  wasteCategory: string | null;
+  isLittererReport: boolean;
+  createdAt: string;
+}
+
+export interface PointLedgerData {
+  totalPoints: number;
+  transactions: PointTransactionItem[];
+}
+
+export interface UpvoteResult {
+  upvoted: boolean;
+  upvoteCount: number;
 }
 
 export interface MyRank {
@@ -117,6 +140,14 @@ export const verifyMyReport = (
     method: "POST",
     body: JSON.stringify({ result, comment }),
   });
+
+export const upvoteReport = (reportId: string) =>
+  citizenRequest<UpvoteResult>(`/api/reports/${reportId}/upvote`, {
+    method: "POST",
+  });
+
+export const getMyPoints = () =>
+  citizenRequest<PointLedgerData>("/api/users/me/points");
 
 export async function updateReportReview(
   reportId: string,

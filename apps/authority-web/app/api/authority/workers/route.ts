@@ -6,7 +6,10 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const auth = await requireAuthoritySession(request);
-  if (auth.response || !auth.session) return auth.response;
+  if (auth.response) return auth.response;
+  if (!auth.session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const zone = auth.session.user.zone;
   const workers = await prisma.user.findMany({
     where: {
